@@ -1,0 +1,19 @@
+# Read about fixtures at http://ar.rubyonrails.org/classes/Fixtures.html
+
+one:
+  instance_id: 
+  ami_id: 
+  instance_type: 
+  status: 
+  security_groups: 
+  region: 
+  monitoring: MyString
+
+two:
+  instance_id: 
+  ami_id: 
+  instance_type: 
+  status: 
+  security_groups: 
+  region: 
+  monitoring: MyString
