@@ -20,6 +20,8 @@ QipsRmgr::Application.routes.draw do
   get "farm/show"
 
   get "farm/edit"
+  
+  get "farm/create"
 
   get "farm/destroy"
 

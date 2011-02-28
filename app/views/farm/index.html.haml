@@ -1,0 +1,29 @@
+.block#block-tables
+  .content
+    %h2.title Farms 
+    .inner
+    .content
+      .p
+      .ul{:id => "navbar"}
+        .li
+          = link_to_unless_current("Home", { :action => "index" })
+        .li
+          = link_to_unless_current("Create Farm", { :action => "create" })
+      .inner
+        %table.table
+          %tr
+            %th.first{:colspan => 2} Name
+            %th.first{} Description
+            %th.first{} AMI ID
+            %th.first{} Role
+            %th &nbsp;
+            %th.last &nbsp;
+          - even = false;
+          - @farms.each do |farm|
+            %tr{ :class => even ? "even" : "odd" }
+              %td{:colspan => 2}= link_to(farm[0], url(:farm, farm[0]))
+              %td
+                = link_to('Edit', url(:edit_farm, farm[0])) 
+                |
+                = link_to('Delete', url(:farm, farm[0]), :method => "delete", :confirm => "Really delete Role #{farm[0]}?  there is no undo.")
+              - even = (not even)
