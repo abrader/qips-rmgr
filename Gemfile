@@ -7,6 +7,7 @@ gem 'rails', '3.0.4'
 
 gem 'sqlite3'
 gem 'haml'
+gem 'haml-rails'
 gem 'chef'
 
 # Use unicorn as the web server
@@ -31,3 +32,8 @@ gem 'chef'
 # group :development, :test do
 #   gem 'webrat'
 # end
+
+group :development do
+	gem "hpricot"
+	gem "ruby_parser"
+end

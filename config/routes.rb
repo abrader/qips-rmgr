@@ -1,4 +1,5 @@
 QipsRmgr::Application.routes.draw do
+  
   get "instance/index"
 
   get "instance/show"

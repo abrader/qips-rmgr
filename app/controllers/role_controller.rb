@@ -1,15 +1,22 @@
+require 'chef/role'
+
 class RoleController < ApplicationController
   respond_to :html, :xml, :json
   
   def index
-   @role_list =  begin
-                  Chef::Role.list()
-                 rescue => e
-                   Chef::Log.error("#{e}\n#{e.backtrace.join("\n")}")
-                   @_message = {:error => "Could not list roles"}
-                   {}
-                 end
-   respond_with(@role_list)
+    @roles = Array.new
+    @role_url = Array.new
+    begin
+      Role.list().each do |name,role_url|
+      @roles << Role.load(name)
+      @role_url << role_url.gsub(/4000/, '4040')
+    end
+    rescue => e
+      Chef::Log.error("#{e}\n#{e.backtrace.join("\n")}")
+      @_message = {:error => "Could not list roles"}
+      {}
+    end
+    respond_with(@roles, @role_url)
   end
 
   def show
