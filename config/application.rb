@@ -38,5 +38,11 @@ module QipsRmgr
 
     # Configure sensitive parameters which will be filtered from the log file.
     config.filter_parameters += [:password]
+    
+    # Generate views in HAML upon creation
+    config.generators do |g|
+        g.template_engine :haml
+    end
+    
   end
 end

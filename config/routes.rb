@@ -1,20 +1,8 @@
 QipsRmgr::Application.routes.draw do
   
-  get "instance/index"
-
-  get "instance/show"
-
-  get "instance/edit"
-
-  get "instance/destroy"
+  get "node/index"
 
   get "role/index"
-
-  get "role/show"
-
-  get "role/edit"
-
-  get "role/destroy"
 
   get "farm/index"
 

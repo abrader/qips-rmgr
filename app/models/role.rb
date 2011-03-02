@@ -1,6 +1,6 @@
 class Role < ActiveRecord::Base
   
-  def chef_server_rest
+   def chef_server_rest
      Chef::REST.new(Chef::Config[:chef_server_url])
    end
 
@@ -23,6 +23,17 @@ class Role < ActiveRecord::Base
      else
        chef_server_rest.get_rest("roles")
      end
+   end
+   
+   def self.get_roles
+     @roles = Array.new
+     Role.list().each do |name,role_url|
+       current_role = Role.load(name)
+       current_role.default_attributes["chef_url"] = role_url.gsub(/4000/, '4040')
+       current_role.save
+       @roles << current_role
+     end
+     @roles
    end
   
 end

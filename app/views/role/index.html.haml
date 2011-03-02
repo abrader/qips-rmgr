@@ -1,0 +1,14 @@
+%h1 Available Roles
+%table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
+  %tr{:bgcolor => "#CCCCCC"}
+    %th Name
+    %th Description
+    %th Recipes
+    %th &nbsp;
+  - @roles.each do |role|
+    %tr.data_row
+      %td= link_to role.name, url_for(role.default_attributes["chef_url"])
+      %td= h role.description
+      %td= h role.run_list.recipes
+      %td= link_to 'Edit', url_for(role.default_attributes["chef_url"] + '/edit')
+%br/
