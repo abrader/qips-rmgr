@@ -1,30 +1,16 @@
-.block#block-tables
-  .content
-    %h2.title Farms 
-    .inner
-    .content
-      .p
-      .ul{:id => "navbar"}
-        .li
-          = link_to_unless_current("Home", { :action => "index" })
-        .li
-          = link_to_unless_current("Create Farm", { :action => "create" })
-      .inner
-        %table.table
-          %tr
-            %th.first{:colspan => 2} Name
-            %th.first{} Description
-            %th.first{} AMI ID
-            %th.first{} Role
-            %th &nbsp;
-            %th.last &nbsp;
-          - even = false;
-          - @farms.each do |farm|
-            %tr{ :class => even ? "even" : "odd" }
-              //%td{:colspan => 2}= link_to(farm[0], url_for(:action => 'edit', farm[0]))
-              //%td{:colspan => 2}= link_to('Show', url_for(:show_farm, farm[0]))
-              %td
-                = link_to('Edit', url_for(:edit_farm, farm[0])) 
-                |
-                = link_to('Delete', url_for(:farm, farm[0]), :method => "delete", :confirm => "Really delete Role #{farm[0]}?  there is no undo.")
-              - even = (not even)
+%h1 Farms
+%table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
+  %tr{:bgcolor => "#669900"}
+    %th.first Name
+    %th Description
+    %th AMI ID
+    %th Roles
+    %th.last &nbsp;
+  - @farms.each do |farm|
+    %tr.data_row
+      %td= link_to farm.name, :controller => "farm", :action => "show", :id => @farm
+      %td= h farm.description
+      %td= h farm.ami_id
+      %td= h farm.role
+      %td= link_to 'Edit', :controller => "farm", :action => "edit", :id => @farm
+%br/

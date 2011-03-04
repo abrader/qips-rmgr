@@ -17,6 +17,9 @@ class FarmController < ApplicationController
   end
 
   def show
+    @farm = Farm.find(params[:farm])
+    
+    respond_with(@farm)
   end
 
   def edit

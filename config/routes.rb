@@ -13,6 +13,8 @@ QipsRmgr::Application.routes.draw do
   get "farm/create"
 
   get "farm/destroy"
+  
+  root :to => 'farms#index'
 
   # The priority is based upon order of creation:
   # first created -> highest priority.
