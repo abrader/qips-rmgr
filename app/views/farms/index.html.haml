@@ -1,6 +1,6 @@
 %h1 Farms
 %table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
-  %tr{:bgcolor => "#669900"}
+  %tr{:bgcolor => "#FF9900"}
     %th.first Name
     %th Description
     %th AMI ID
@@ -8,9 +8,10 @@
     %th.last &nbsp;
   - @farms.each do |farm|
     %tr.data_row
-      %td= link_to farm.name, :controller => "farm", :action => "show", :id => @farm
+      %td= link_to farm.name, edit_farm_path(farm.id)
       %td= h farm.description
       %td= h farm.ami_id
       %td= h farm.role
-      %td= link_to 'Edit', :controller => "farm", :action => "edit", :id => @farm
+      %td= link_to 'Destroy', farm_path(farm), :method => 'delete', :confirm => "Are you sure you want to delete the farm titled #{farm.name}?"
 %br/
+= link_to 'Create a new farm', new_farm_path

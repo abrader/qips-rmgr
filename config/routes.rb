@@ -1,18 +1,19 @@
 QipsRmgr::Application.routes.draw do
+  resources :farms, :nodes, :roles
   
-  get "node/index"
+  #get "node/index"
 
-  get "role/index"
+  #get "role/index"
 
-  get "farm/index"
+  #get "farm/index"
 
-  get "farm/show"
+  #get "farm/show"
 
-  get "farm/edit"
+  #get "farm/edit"
   
-  get "farm/create"
+  #get "farm/create"
 
-  get "farm/destroy"
+  #get "farm/destroy"
   
   root :to => 'farms#index'
 

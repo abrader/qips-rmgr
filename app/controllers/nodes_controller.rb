@@ -1,4 +1,4 @@
-class NodeController < ApplicationController
+class NodesController < ApplicationController
   respond_to :html, :xml, :json
   
   include ActionView::Helpers::DateHelper
