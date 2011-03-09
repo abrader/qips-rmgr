@@ -1,0 +1,20 @@
+.content.farmFormContainer
+  = form_for(@farm) do |f|
+    .group.form
+      %label.label{:for => "farm_name"} Name
+      = text_field :farm, :name, :value => params.has_key?(:name) ? h(params[:name]) : @farm.name
+      %span.description The name of the Farm
+    .group.form
+      %label.label{:for => "farm_description"} Description
+      = text_area :farm, :description, :value => params.has_key?(:description) ? h(params[:description]) : @farm.description
+      %span.description A description of this Farm
+    .group.form
+      %label.label{:for => "farm_ami_id"} Amazon Machine Image ID
+      = text_field :farm, :ami_id, :size => 12, :value => params.has_key?(:ami_id) ? h(params[:ami_id]) : @farm.ami_id
+      %span.ami_id The Amazon Machine ID associated with this Farm
+    .group.form
+      %label.label{:for => "farm_roles"} Roles
+      = text_field :farm, :role, :value => params.has_key?(:role) ? h(params[:role]) : @farm.role
+      %span.roles The roles associated with this Farm
+    .group.form
+      = f.submit "Commit"

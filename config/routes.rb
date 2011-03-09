@@ -1,21 +1,7 @@
 QipsRmgr::Application.routes.draw do
   resources :farms, :nodes, :roles
   
-  #get "node/index"
-
-  #get "role/index"
-
-  #get "farm/index"
-
-  #get "farm/show"
-
-  #get "farm/edit"
-  
-  #get "farm/create"
-
-  #get "farm/destroy"
-  
-  root :to => 'farms#index'
+  root :to => "Farms#index"
 
   # The priority is based upon order of creation:
   # first created -> highest priority.

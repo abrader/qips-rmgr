@@ -1,0 +1,5 @@
+%h2.title= "Farm #{h @farm.name}"
+= render :partial => 'form'
+= link_to 'Show', farm_path(@farm)
+|
+= link_to 'Back', farms_path

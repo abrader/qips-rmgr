@@ -21,8 +21,9 @@ class FarmsController < ApplicationController
 
   def edit
     @farm = Farm.find(params[:id])
+    @roles = Role.get_roles
     
-    respond_with(@farm)
+    respond_with(@farm, @roles)
   end
 
   def destroy
