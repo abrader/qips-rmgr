@@ -25,12 +25,22 @@ class FarmsController < ApplicationController
     
     respond_with(@farm, @roles)
   end
+  
+  def update
+    @farm = Farm.find(params[:id])
+    
+    if @farm.update_attributes(params[:farm])
+      redirect_to farms_path, :notice => "Farm #{@farm.name} was updated successfully."
+    else
+      render :action => "edit"
+    end 
+  end
 
   def destroy
     begin
       @farm = Farm.find(params[:id])
       #@farm.destroy
-      redirect_to farms_path, :notice => "Farm #{@farm.name} deleted successfully."
+      redirect_to farms_path, :notice => "Farm #{@farm.name} was deleted successfully."
     rescue => e
       puts e.backtrace
       @farms = Farm.all
