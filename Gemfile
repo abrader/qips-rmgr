@@ -10,6 +10,7 @@ gem 'haml'
 gem 'haml-rails'
 gem 'fog'
 gem 'chef'
+gem 'net-ssh-multi'
 
 # Use unicorn as the web server
 # gem 'unicorn'

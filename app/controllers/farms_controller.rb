@@ -48,5 +48,4 @@ class FarmsController < ApplicationController
       render :index
     end
   end
-
 end

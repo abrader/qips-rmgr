@@ -15,4 +15,10 @@ class NodesController < ApplicationController
     end
     respond_with(@compute, @servers, @ec2_instances)
   end
+  
+  def reconcile
+    begin
+    rescue
+    end
+  end
 end

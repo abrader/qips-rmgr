@@ -1,6 +1,8 @@
 QipsRmgr::Application.routes.draw do
   resources :farms, :nodes, :roles
   
+  match "nodes/reconcile" => "Nodes#reconcile"
+  
   root :to => "Farms#index"
 
   # The priority is based upon order of creation:

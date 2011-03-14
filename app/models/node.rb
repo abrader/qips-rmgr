@@ -1,5 +1,7 @@
 class Node < ActiveRecord::Base
   
+  require 'chef/knife/bootstrap'
+  
   @@connection = Fog::Compute.new(
     :provider => 'AWS',
     :aws_access_key_id => Chef::Config[:knife][:aws_access_key_id],
@@ -87,6 +89,73 @@ class Node < ActiveRecord::Base
       end
     end
     @nodes
+  end
+  
+  def self.start 
+    #require 'fog'
+    #require 'highline'
+    require 'net/ssh/multi'
+    #require 'readline'
+
+    $stdout.sync = true
+
+    server = @@connection.servers.create(
+      :image_id => Chef::Config[:knife][:image],
+      :groups => Chef::Config[:knife][:security_groups],
+      :flavor_id => Chef::Config[:knife][:flavor],
+      :key_name => Chef::Config[:knife][:aws_ssh_key_id],
+      :availability_zone => Chef::Config[:availability_zone]
+    )
+
+    # wait for it to be ready to do stuff
+    server.wait_for { print "."; ready? }
+
+    print(".") until tcp_test_ssh(server.dns_name) { sleep @initial_sleep_delay ||= 10; puts("done") }
+
+    #bootstrap_for_node(server).run
+  end
+  
+  def tcp_test_ssh(hostname)
+    tcp_socket = TCPSocket.new(hostname, 22)
+    readable = IO.select([tcp_socket], nil, nil, 5)
+    if readable
+      Chef::Log.debug("sshd accepting connections on #{hostname}, banner is #{tcp_socket.gets}")
+      yield
+      true
+    else
+      false
+    end
+  rescue Errno::ETIMEDOUT
+    false
+  rescue Errno::ECONNREFUSED
+    sleep 2
+    false
+  ensure
+    tcp_socket && tcp_socket.close
+  end
+  
+  def self.bootstrap_for_node(server)
+    bootstrap = Chef::Knife::Bootstrap.new
+    bootstrap.name_args = [server.dns_name]
+    bootstrap.config[:run_list] = @name_args
+    bootstrap.config[:ssh_user] = config[:ssh_user]
+    bootstrap.config[:identity_file] = config[:identity_file]
+    bootstrap.config[:chef_node_name] = config[:chef_node_name] || server.id
+    bootstrap.config[:prerelease] = config[:prerelease]
+    bootstrap.config[:distro] = config[:distro]
+    bootstrap.config[:use_sudo] = true
+    bootstrap.config[:template_file] = config[:template_file]
+    bootstrap.config[:environment] = config[:environment]
+    bootstrap
+  end
+  
+  def self.reconcile_nodes()
+    Node.get_compute.each do |comp|
+      if comp.idletime_seconds > Chef::Config[:max_idle_seconds]
+        #Shutdown node if this is a good metric
+        puts "Time to shutdown #{comp.ec2.instance_id}"
+      end
+    end    
   end
   
 end
