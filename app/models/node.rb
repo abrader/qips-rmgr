@@ -111,39 +111,57 @@ class Node < ActiveRecord::Base
     # wait for it to be ready to do stuff
     server.wait_for { print "."; ready? }
 
-    print(".") until tcp_test_ssh(server.dns_name) { sleep @initial_sleep_delay ||= 10; puts("done") }
+    print(".") until Node.ssh_available?(server.dns_name) { sleep @initial_sleep_delay ||= 10; puts("done") }
 
     #bootstrap_for_node(server).run
   end
   
   def self.start_with_spot_request
-    @@ec2.request_spot_instances(
+    server = @@ec2.request_spot_instances(
             :image_id => Chef::Config[:knife][:image],
             :spot_price => 0.05,
             :key_name => Chef::Config[:knife][:aws_ssh_key_id],
             :instance_count => 1,
             :groups => Chef::Config[:knife][:security_groups],
             :instance_type => Chef::Config[:knife][:flavor]
-    ) #=>
+    )
+    
+    spot_instance_request_id = server[0][:spot_instance_request_id]
+    instance_id = nil
+    
+    while instance_id == nil
+      sleep(5)
+      status = Node.describe_spot_instance_request(spot_instance_request_id) 
+      instance_id = status[0][:instance_id]
+      state = status[0][:state]
+      break if (state == nil || state == "cancelled" || state == "failed")
+    end
+    
+    instance_id
+    
+    # wait for it to be ready to do stuff
+    #server.wait_for { print "."; ready? }
+
+    #print(".") until Node.ssh_available?(server.dns_name) { sleep @initial_sleep_delay ||= 10; puts("done") }
+
+    #bootstrap_for_node(server).run
   end
   
-  def self.tcp_test_ssh(hostname)
-    tcp_socket = TCPSocket.new(hostname, 22)
-    readable = IO.select([tcp_socket], nil, nil, 5)
-    if readable then
-      Chef::Log.debug("sshd accepting connections on #{hostname}, banner is #{tcp_socket.gets}")
-      yield
-      true
-    else
-      false
+  def self.describe_spot_instance_request(spot_request_id)
+    @@ec2.describe_spot_instance_requests(spot_request_id)
+  end
+  
+  def self.ssh_available?(hostname)
+    good_connect = false
+    while good_connect == false
+      sleep(3)
+      tcp_socket = TCPSocket.new(hostname, 22)
+      good_connect = IO.select([tcp_socket], nil, nil, 5)
+      tcp_socket.close
+      Chef::Log.debug("#{hostname} not accepting SSH connections quite yet")
     end
-  rescue Errno::ETIMEDOUT
-    false
-  rescue Errno::ECONNREFUSED
-    sleep 2
-    false
-  ensure
-    tcp_socket && tcp_socket.close
+    Chef::Log.debug("sshd accepting connections on #{hostname}")
+    true
   end
   
   def self.bootstrap_for_node(server)
