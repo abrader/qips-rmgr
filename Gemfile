@@ -11,6 +11,7 @@ gem 'haml-rails'
 gem 'fog'
 gem 'chef'
 gem 'net-ssh-multi'
+gem 'right_aws'
 
 # Use unicorn as the web server
 # gem 'unicorn'

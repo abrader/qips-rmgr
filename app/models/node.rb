@@ -5,9 +5,10 @@ class Node < ActiveRecord::Base
   @@connection = Fog::Compute.new(
     :provider => 'AWS',
     :aws_access_key_id => Chef::Config[:knife][:aws_access_key_id],
-    :aws_secret_access_key => Chef::Config[:knife][:aws_secret_access_key]#,
-    #:region => Chef::Config[:knife][:region]
+    :aws_secret_access_key => Chef::Config[:knife][:aws_secret_access_key]
   )
+  
+  @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
   
   def chef_server_rest
     Chef::REST.new(Chef::Config[:chef_server_url])
@@ -115,10 +116,21 @@ class Node < ActiveRecord::Base
     #bootstrap_for_node(server).run
   end
   
-  def tcp_test_ssh(hostname)
+  def self.start_with_spot_request
+    @@ec2.request_spot_instances(
+            :image_id => Chef::Config[:knife][:image],
+            :spot_price => 0.05,
+            :key_name => Chef::Config[:knife][:aws_ssh_key_id],
+            :instance_count => 1,
+            :groups => Chef::Config[:knife][:security_groups],
+            :instance_type => Chef::Config[:knife][:flavor]
+    ) #=>
+  end
+  
+  def self.tcp_test_ssh(hostname)
     tcp_socket = TCPSocket.new(hostname, 22)
     readable = IO.select([tcp_socket], nil, nil, 5)
-    if readable
+    if readable then
       Chef::Log.debug("sshd accepting connections on #{hostname}, banner is #{tcp_socket.gets}")
       yield
       true
