@@ -1,7 +1,7 @@
 QipsRmgr::Application.routes.draw do
   resources :farms, :nodes, :roles
   
-  match "nodes/reconcile" => "Nodes#reconcile"
+  match "nodes/reconcile" => "nodes#reconcile"
   
   root :to => "Farms#index"
 

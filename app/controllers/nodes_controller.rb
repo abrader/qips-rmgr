@@ -16,6 +16,18 @@ class NodesController < ApplicationController
     respond_with(@compute, @servers, @ec2_instances)
   end
   
+  def destroy
+    begin
+      @instance_id = params[:instance_id]
+      Node.shutdown_instance(@instance_id)
+      redirect_to nodes_path, :notice => "#{@instance_id} was shutdown successfully."
+    rescue => e
+      puts e.backtrace
+      @_message = {:error => "Could not delete chef client and shutdown instance associated with #{@instance_id}"}
+      {}
+    end
+  end
+  
   def reconcile
     begin
     rescue

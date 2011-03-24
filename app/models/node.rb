@@ -169,9 +169,25 @@ class Node < ActiveRecord::Base
     # wait for it to be ready to do stuff
     Node.wait_for_ssh(@hostname)
 
+    # Must wait a min or so for system to come up for SSH to be responsive enough in order to avoid failure
+    sleep(60)
+
     # FIXME Something is getting hung up when Chef libs attempt to contact compute node via SSH
     # Time to get that instance boostrapped with Chef-client
     instance_bootstrap(instance).run
+  end
+  
+  def self.delete_chef_client(client_name)
+    begin
+      Chef::REST.new(Chef::Config[:chef_server_url]).delete_rest("nodes/#{client_name}")
+    rescue Net::HTTPServerException
+      false
+    end
+  end
+  
+  def self.shutdown_instance(instance_id)
+    self.delete_chef_client(instance_id)
+    @@ec2.terminate_instances(instance_id)
   end
   
   def self.describe_spot_instance_request(spot_request_id)
