@@ -22,7 +22,7 @@
       %td= h node.roles
       %td= h distance_of_time_in_words(0, node.uptime_seconds, true).capitalize
       %td= link_to 'Edit', url_for(node.chef_url + '/edit')
-      %td= link_to "Shutdown", { :method => :delete, :instance_id => node.ec2.instance_id }, :confirm => "Are you sure you want to shutdown the instance #{node.ec2.instance_id}?"
+      %td= link_to "Shutdown", shutdown_node_path(:instance_id => node.ec2.instance_id), :confirm => "Are you sure you want to shutdown the instance #{node.ec2.instance_id}?"
 %br/
 %h1 Chef Servers
 %table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
@@ -62,5 +62,5 @@
       %td= h ec2_instance["ami_id"]
       %td= h ec2_instance["state"]
       %td= h distance_of_time_in_words(0, ec2_instance["uptime_seconds"], true).capitalize
-      %td= link_to 'Shutdown', { :method => :delete, :instance_id => ec2_instance["instance_id"] }, :confirm => "Are you sure you want to shutdown the instance #{ec2_instance["instance_id"]}?"
+      %td= link_to "Shutdown", shutdown_node_path(:instance_id => ec2_instance["instance_id"]), :confirm => "Are you sure you want to shutdown the instance #{ec2_instance["instance_id"]}?"
 %br/

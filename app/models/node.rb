@@ -1,4 +1,5 @@
 class Node < ActiveRecord::Base
+  after_initialize :do_this_after_initialize
   
   require 'chef/knife/bootstrap'
   require 'chef/knife/ssh'
@@ -11,7 +12,7 @@ class Node < ActiveRecord::Base
   
   @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
   
-  def after_initialize()
+  def do_this_after_initialize()
     @instance_id = nil
     @sir_state = nil
     @aws_state = nil
@@ -45,7 +46,8 @@ class Node < ActiveRecord::Base
     end
   end
   
-  def self.get_ec2 
+  def self.get_ec2
+     # TODO remove instances that appear in get_servers and get_compute methods 
      @ec2_info = Array.new
 
      @@connection.servers.all.each do |instance|
@@ -65,13 +67,17 @@ class Node < ActiveRecord::Base
    
    #Check to see if an instance_id already exists in local record
    def self.instance_match(instance_id)
-     match = false
      self.get_servers().each do |node|
        if instance_id == node.ec2.instance_id then
-         match = true
+         return true
        end
      end
-     match
+     self.get_compute().each do |node|
+       if instance_id == node.ec2.instance_id then
+         return true
+       end
+     end
+     false
    end  
   
   # Return an array of system information pertaining to servers only
@@ -177,7 +183,7 @@ class Node < ActiveRecord::Base
     instance_bootstrap(instance).run
   end
   
-  def self.delete_chef_client(client_name)
+  def self.delete_chef_node(client_name)
     begin
       Chef::REST.new(Chef::Config[:chef_server_url]).delete_rest("nodes/#{client_name}")
     rescue Net::HTTPServerException
@@ -185,7 +191,16 @@ class Node < ActiveRecord::Base
     end
   end
   
+  def self.delete_chef_client(client_name)
+    begin
+      Chef::REST.new(Chef::Config[:chef_server_url]).delete_rest("clients/#{client_name}")
+    rescue Net::HTTPServerException
+      false
+    end
+  end
+  
   def self.shutdown_instance(instance_id)
+    self.delete_chef_node(instance_id)
     self.delete_chef_client(instance_id)
     @@ec2.terminate_instances(instance_id)
   end

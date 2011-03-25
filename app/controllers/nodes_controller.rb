@@ -18,12 +18,14 @@ class NodesController < ApplicationController
   
   def destroy
     begin
-      @instance_id = params[:instance_id]
-      Node.shutdown_instance(@instance_id)
-      redirect_to nodes_path, :notice => "#{@instance_id} was shutdown successfully."
+      if params[:instance_id] then
+        @instance_id = params[:instance_id]
+        Node.shutdown_instance(@instance_id)
+        redirect_to nodes_url, :notice => "#{@instance_id} was shutdown successfully."
+      end
     rescue => e
       puts e.backtrace
-      @_message = {:error => "Could not delete chef client and shutdown instance associated with #{@instance_id}"}
+      @_message = {:error => "Could not delete chef client and shutdown instance associated with #{:instance_id}"}
       {}
     end
   end
