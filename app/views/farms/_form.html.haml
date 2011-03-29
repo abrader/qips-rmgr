@@ -14,7 +14,7 @@
       %span.ami_id The Amazon Machine ID associated with this Farm
     .group.form
       %label.label{:for => "farm_roles"} Roles
-      = text_field :farm, :role, :value => params.has_key?(:role) ? h(params[:role]) : @farm.role
+      = select :farm, :role, @roles.map {|r| [r.name, r.name]}, :value => params.has_key?(:role) ? h(params[:role]) : @farm.role
       %span.roles The roles associated with this Farm
     .group.form
       = f.submit "Commit"

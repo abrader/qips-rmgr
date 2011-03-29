@@ -6,9 +6,15 @@
     %th Recipes
     %th &nbsp;
   - @roles.each do |role|
+    - recipes = role.run_list.expand('server').recipes
     %tr.data_row
       %td= link_to role.name, url_for(role.default_attributes["chef_url"])
       %td= h role.description
-      %td= h role.run_list.recipes
+      %td
+        - recipes.each do |recipe|
+          %table
+            %tr
+              %td= h recipe        
       %td= link_to 'Edit', url_for(role.default_attributes["chef_url"] + '/edit')
 %br/
+= link_to 'New Role', url_for(Role.chef_server_rest.create_url("roles/new").to_s.gsub(/4000/, '4040'))
