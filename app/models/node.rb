@@ -1,5 +1,5 @@
-class Node < ActiveRecord::Base
-  after_initialize :do_this_after_initialize
+class Node
+  attr_accessor :instance_id, :sir_state, :aws_state, :hostname, :spot_instance_request_id
   
   require 'chef/knife/bootstrap'
   require 'chef/knife/ssh'
@@ -11,15 +11,6 @@ class Node < ActiveRecord::Base
   )
   
   @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
-  
-  def do_this_after_initialize()
-    @instance_id = nil
-    @sir_state = nil
-    @aws_state = nil
-    @hostname = nil
-    @instance_id = nil
-    @spot_instance_request_id = nil
-  end
   
   def chef_server_rest
     Chef::REST.new(Chef::Config[:chef_server_url])
@@ -108,39 +99,18 @@ class Node < ActiveRecord::Base
     @nodes
   end
   
-  def self.start_by_request
-    # This is the AWS full cost request
-    require 'net/ssh/multi'
-
-    $stdout.sync = true
-
-    instance = @@connection.servers.create(
-      :image_id => Chef::Config[:knife][:image],
-      :groups => Chef::Config[:knife][:security_groups],
-      :flavor_id => Chef::Config[:knife][:flavor],
-      :key_name => Chef::Config[:knife][:aws_ssh_key_id],
-      :availability_zone => Chef::Config[:availability_zone]
-    )
-
-    # wait for it to be ready to do stuff
-    server.wait_for { print "."; ready? }
-
-    print(".") until Node.ssh_available?(instance.dns_name) { sleep @initial_sleep_delay ||= 10; puts("done") }
-
-    #instance_bootstrap(instance).run
-  end
-  
-  def start_by_spot_request
+  def start_by_spot_request(farm_name, image_id=Chef::Config[:knife][:image], spot_price=Chef::Config[:knife][:spot_price])
     # This is the AWS reduced cost spot request
     require 'net/ssh/multi'
     
     instance = nil
     
     sir = @@ec2.request_spot_instances(
-            :image_id => Chef::Config[:knife][:image],
-            :spot_price => 0.05,
+            :image_id => image_id,
+            :spot_price => spot_price,
             :key_name => Chef::Config[:knife][:aws_ssh_key_id],
             :instance_count => 1,
+            :monitoring_enabled => true,
             :launch_group => 'QIPS_dev',
             :groups => Chef::Config[:knife][:security_groups],
             :instance_type => Chef::Config[:knife][:flavor]
@@ -181,8 +151,21 @@ class Node < ActiveRecord::Base
     # FIXME Something is getting hung up when Chef libs attempt to contact compute node via SSH
     # Time to get that instance boostrapped with Chef-client
     instance_bootstrap(instance).run
+    
+    # Set farm attribute so we can retrieve from OHAI later.
+    self.set_farm_attrib(farm_name)
   end
   
+  def self.set_farm_attrib(farm_name)
+    begin
+      node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{@instance_id}")
+      node.attribute["qips_farm"] = farm_name
+      node.save
+    rescue
+      Rails.logger.error("Node.set_farm_attrib: Unable to set attribute for #{farm_name} farm to #{@instance_id}")
+    end
+  end
+
   def self.delete_chef_node(client_name)
     begin
       Chef::REST.new(Chef::Config[:chef_server_url]).delete_rest("nodes/#{client_name}")
