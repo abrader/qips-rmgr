@@ -5,6 +5,8 @@ QipsRmgr::Application.routes.draw do
   
   match "nodes/shutdown/:instance_id" => "nodes#destroy", :as => 'shutdown_node'
   
+  match "farms/start/:name/:num_instances" => "farms#start", :as => 'start_farm'
+  
   root :to => "Farms#index"
 
   # The priority is based upon order of creation:

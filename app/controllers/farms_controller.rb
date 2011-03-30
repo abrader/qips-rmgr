@@ -35,6 +35,18 @@ class FarmsController < ApplicationController
       render :action => "edit"
     end 
   end
+  
+  def start
+    begin
+      @farm = Farm.find_by_name(params[:name])
+      @farm.start_instances(params[:num_instances])
+      redirect_to farms_path, :notice => "Started #{params[:num_instances]} of #{@farm.name}."
+    rescue => e
+      puts e.backtrace
+      @_message = {:error => "Unable to start #{params[:num_instances]} of #{@farm.name}"}
+      render :index
+    end
+  end
 
   def destroy
     begin
