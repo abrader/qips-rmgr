@@ -18,21 +18,26 @@ class NodesController < ApplicationController
   
   def destroy
     begin
-      if params[:instance_id] then
-        @instance_id = params[:instance_id]
+      if params[:id] then
+        @instance_id = params[:id]
         Node.shutdown_instance(@instance_id)
         redirect_to nodes_url, :notice => "#{@instance_id} was shutdown successfully."
       end
     rescue => e
       puts e.backtrace
-      @_message = {:error => "Could not delete chef client and shutdown instance associated with #{:instance_id}"}
-      {}
+      Rails.logger.error("Could not delete chef client and shutdown instance associated with #{:instance_id}")
+      render :index
     end
   end
   
   def reconcile
     begin
+      @resp = Node.reconcile_nodes()
+      redirect_to nodes_path, :notice => "Reconciliation was handled successfully."
     rescue
+      puts e.backtrace
+      Rails.logger.error("NodesController.reconcile: Unable to reconcile nodes")
+      render :index
     end
   end
 end

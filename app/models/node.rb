@@ -12,6 +12,8 @@ class Node
   
   @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
   
+  @@acw = RightAws::AcwInterface.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
+  
   def chef_server_rest
     Chef::REST.new(Chef::Config[:chef_server_url])
   end
@@ -35,6 +37,16 @@ class Node
     else
       chef_server_rest.get_rest("nodes")
     end
+  end
+  
+  def self.cpu_util(instance_id)
+    stats = @@acw.get_metric_statistics(:start_time => (Time.now.utc - 6*60), :period => 60, :namespace => "AWS/EC2", :dimentions => {:InstanceId => instance_id}, :measure_name=>"CPUUtilization")
+    avg = 0.0
+    stats[:datapoints].each do |stat|
+      avg + stat[:average]
+    end
+    avg = avg / 5
+    avg
   end
   
   def self.get_ec2
@@ -148,15 +160,30 @@ class Node
     # Must wait a min or so for system to come up for SSH to be responsive enough in order to avoid failure
     sleep(60)
 
-    # FIXME Something is getting hung up when Chef libs attempt to contact compute node via SSH
     # Time to get that instance boostrapped with Chef-client
-    instance_bootstrap(instance).run
+    instance_bootstrap(farm_name).run
+    
+    # Now the chef-client is running on our instance, let's get it bound to it's role, this should get recipes flowing.
+    #set_run_list(farm_name)
     
     # Set farm attribute so we can retrieve from OHAI later.
-    self.set_farm_attrib(farm_name)
+    set_farm_attrib(farm_name)
   end
   
-  def self.set_farm_attrib(farm_name)
+  def set_run_list(farm_name)
+    begin
+      @role_name = Farm.find_by_name(farm_name).role
+      chef_role = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("roles/#{@role_name}")
+      chef_node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{@instance_id}")
+      chef_node.run_list = chef_role.run_list
+      chef_node.save
+    rescue
+      puts e.backtrace
+      Rails.logger.error("Nodes.bind_run_list: Unable to bind #{@role_name} to #{@instance_id}")
+    end
+  end
+  
+  def set_farm_attrib(farm_name)
     begin
       node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{@instance_id}")
       node.attribute["qips_farm"] = farm_name
@@ -227,34 +254,50 @@ class Node
     return true
   end
   
-  def instance_bootstrap(instance)
-    bootstrap = Chef::Knife::Bootstrap.new
-    bootstrap.name_args = @hostname
-    # TODO @name_args is argv on the command line for Knife, need to replace with proper runlist.
-    # Comma separated list of roles/recipes to apply
-    bootstrap.config[:run_list] = @name_args
-    bootstrap.config[:ssh_user] = Chef::Config[:knife][:ssh_user]
-    # The SSH identity file used for authentication
-    bootstrap.config[:identity_file] = Chef::Config[:knife][:ssh_client_key]
-    # The Chef node name for your new node
-    bootstrap.config[:chef_node_name] = @instance_id
-    # This is if you want pre-release Chef client gems to be installed
-    #bootstrap.config[:prerelease] = config[:prerelease]
-    # Bootstrap a distro using a template
-    #bootstrap.config[:distro] = config[:distro]
-    bootstrap.config[:use_sudo] = true
-    # Full path to location of template to use
-    #bootstrap.config[:template_file] = config[:template_file]
-    # Not sure environment is even used since I couldn't find it referenced in › chef› lib› chef› knife› bootstrap.rb
-    #bootstrap.config[:environment] = config[:environment]
-    bootstrap
+  def instance_bootstrap(farm_name)
+    begin
+      # FIXME run_list thinks role is a recipe and determines it can't find it.
+      @role_name = Farm.find_by_name(farm_name).role
+      chef_role = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("roles/#{@role_name}")
+      
+      bootstrap = Chef::Knife::Bootstrap.new
+      bootstrap.name_args = @hostname
+      # TODO @name_args is argv on the command line for Knife, need to replace with proper runlist.
+      # Comma separated list of roles/recipes to apply
+      bootstrap.config[:run_list] = chef_role
+      bootstrap.config[:ssh_user] = Chef::Config[:knife][:ssh_user]
+      # The SSH identity file used for authentication
+      bootstrap.config[:identity_file] = Chef::Config[:knife][:ssh_client_key]
+      # The Chef node name for your new node
+      bootstrap.config[:chef_node_name] = @instance_id
+      # This is if you want pre-release Chef client gems to be installed
+      #bootstrap.config[:prerelease] = config[:prerelease]
+      # Bootstrap a distro using a template
+      #bootstrap.config[:distro] = config[:distro]
+      bootstrap.config[:use_sudo] = true
+      # Full path to location of template to use
+      #bootstrap.config[:template_file] = config[:template_file]
+      # Not sure environment is even used since I couldn't find it referenced in › chef› lib› chef› knife› bootstrap.rb
+      #bootstrap.config[:environment] = config[:environment]
+      bootstrap
+    rescue
+      Rails.logger.error("Node.instance_bootstrap: Unable to boostrap instance #{@instance_id}")
+    end
   end
   
   def self.reconcile_nodes()
     Node.get_compute.each do |comp|
-      if comp.idletime_seconds > Chef::Config[:max_idle_seconds]
-        # TODO Shutdown node if this is a good metric
-        puts "Time to shutdown #{comp.ec2.instance_id}"
+      instance = @@ec2.describe_instances(comp.ec2.instance_id)[0]
+      uptime_sec  = (Time.now.to_i - DateTime.parse(instance[:aws_launch_time]).to_i)
+      if (uptime_sec % (60 * 60)) >= 3120 # 3120 = 52 minutes * 60 secs
+        if self.cpu_util(comp.ec2.instance_id) < 0.2 then
+          Rails.logger.info("Node.reconcile_nodes: Shutting down #{comp.ec2.instance_id} due to inactivity.")
+          #Node.shutdown_instance(comp.ec2.instance_id)
+        else
+          Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to activity")
+        end
+      else
+        Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to incompatible interval")
       end
     end    
   end

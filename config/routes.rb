@@ -1,9 +1,15 @@
 QipsRmgr::Application.routes.draw do
-  resources :farms, :nodes, :roles
+  resources :farms, :roles
   
-  match "nodes/reconcile" => "nodes#reconcile"
-  
-  match "nodes/shutdown/:instance_id" => "nodes#destroy", :as => 'shutdown_node'
+  resources :nodes do
+    collection do
+      get 'reconcile'
+    end
+    
+    member do
+      get 'shutdown', :action => 'destroy'
+    end
+  end
   
   match "farms/start/:name/:num_instances" => "farms#start", :as => 'farm_start'
   
