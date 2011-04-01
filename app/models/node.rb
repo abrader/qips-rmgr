@@ -50,7 +50,6 @@ class Node
   end
   
   def self.get_ec2
-     # TODO remove instances that appear in get_servers and get_compute methods 
      @ec2_info = Array.new
 
      @@connection.servers.all.each do |instance|
@@ -157,8 +156,8 @@ class Node
     # wait for it to be ready to do stuff
     Node.wait_for_ssh(@hostname)
 
-    # Must wait a min or so for system to come up for SSH to be responsive enough in order to avoid failure
-    sleep(60)
+    # Must wait for system to come up for SSH to be responsive enough in order to avoid failure
+    sleep(45)
 
     # Time to get that instance boostrapped with Chef-client
     instance_bootstrap(farm_name).run
@@ -258,13 +257,12 @@ class Node
     begin
       # FIXME run_list thinks role is a recipe and determines it can't find it.
       @role_name = Farm.find_by_name(farm_name).role
-      chef_role = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("roles/#{@role_name}")
+      #chef_role = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("roles/#{@role_name}")
       
       bootstrap = Chef::Knife::Bootstrap.new
       bootstrap.name_args = @hostname
-      # TODO @name_args is argv on the command line for Knife, need to replace with proper runlist.
       # Comma separated list of roles/recipes to apply
-      bootstrap.config[:run_list] = chef_role
+      bootstrap.config[:run_list] = "role[#{@role_name}]"
       bootstrap.config[:ssh_user] = Chef::Config[:knife][:ssh_user]
       # The SSH identity file used for authentication
       bootstrap.config[:identity_file] = Chef::Config[:knife][:ssh_client_key]

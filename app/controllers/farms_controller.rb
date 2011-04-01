@@ -40,7 +40,7 @@ class FarmsController < ApplicationController
     begin
       @farm = Farm.find_by_name(params[:name])
       @farm.start_instances(params[:num_instances])
-      redirect_to farms_path, :notice => "Started #{:num_instances} in #{params[:name]} successfully."
+      redirect_to farms_path, :notice => "Started #{params[:num_instances]} in #{params[:name]} successfully."
     rescue => e
       Rails.logger.error("FarmsController.start: Unable to start #{params[:num_instances]} instances in #{params[:name]}")
       render :index

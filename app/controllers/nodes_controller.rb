@@ -25,7 +25,7 @@ class NodesController < ApplicationController
       end
     rescue => e
       puts e.backtrace
-      Rails.logger.error("Could not delete chef client and shutdown instance associated with #{:instance_id}")
+      Rails.logger.error("Could not delete chef client and shutdown instance associated with #{params[:id]}")
       render :index
     end
   end
