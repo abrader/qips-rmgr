@@ -4,6 +4,9 @@ class Node
   require 'chef/knife/bootstrap'
   require 'chef/knife/ssh'
   
+  DEFAULT_32_INSTANCE_TYPE = "m1.small"
+  DEFAULT_64_INSTANCE_TYPE = "m1.large"
+  
   @@connection = Fog::Compute.new(
     :provider => 'AWS',
     :aws_access_key_id => Chef::Config[:knife][:aws_access_key_id],
@@ -110,11 +113,20 @@ class Node
     @nodes
   end
   
-  def start_by_spot_request(farm_name, image_id=Chef::Config[:knife][:image], spot_price=Chef::Config[:knife][:spot_price])
+  def start_by_spot_request(farm_name, image_id=Chef::Config[:knife][:image], ami_type=nil, spot_price=Chef::Config[:knife][:spot_price])
     # This is the AWS reduced cost spot request
     require 'net/ssh/multi'
     
     instance = nil
+    
+    if ami_type == nil
+      arch = Node.get_arch(image_id)
+      if arch == "i386"
+        ami_type = DEFAULT_32_INSTANCE_TYPE
+      else
+        ami_type = DEFAULT_64_INSTANCE_TYPE
+      end
+    end
     
     sir = @@ec2.request_spot_instances(
             :image_id => image_id,
@@ -124,7 +136,7 @@ class Node
             :monitoring_enabled => true,
             :launch_group => 'QIPS_dev',
             :groups => Chef::Config[:knife][:security_groups],
-            :instance_type => Chef::Config[:knife][:flavor]
+            :instance_type => ami_type
     )
     
     @spot_instance_request_id = sir[0][:spot_instance_request_id]
@@ -229,6 +241,11 @@ class Node
     end    
   end
   
+  # Returns i386 or x86_64, require Amazon Image ID
+  def self.get_arch(ami_id)
+    @@ec2.describe_images(ami_id)[0][:aws_architecture]
+  end
+  
   def self.wait_for_ssh(host)
     available = false
     while available == false
@@ -240,12 +257,12 @@ class Node
       rescue Errno::ECONNREFUSED
         #available = false
         sleep(5)
-        puts ("Not available: REFUSED connection to host: #{host}")
+        Rails.logger.debug("Not available: REFUSED connection to host: #{host}")
         retry if available == false
       rescue Timeout::Error, StandardError
         #available = false
         sleep(5)
-        puts ("Not available: ERROR connection to host: #{host}")
+        Rails.logger.debug("Not available: ERROR connection to host: #{host}")
         retry if available == false
       end
       available = true
@@ -254,14 +271,11 @@ class Node
   end
   
   def instance_bootstrap(farm_name)
-    begin
-      # FIXME run_list thinks role is a recipe and determines it can't find it.
-      @role_name = Farm.find_by_name(farm_name).role
-      #chef_role = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("roles/#{@role_name}")
-      
+    begin      
       bootstrap = Chef::Knife::Bootstrap.new
       bootstrap.name_args = @hostname
-      # Comma separated list of roles/recipes to apply
+      # Comma separated list of roles/recipes to apply, getting role via Farm
+      @role_name = Farm.find_by_name(farm_name).role
       bootstrap.config[:run_list] = "role[#{@role_name}]"
       bootstrap.config[:ssh_user] = Chef::Config[:knife][:ssh_user]
       # The SSH identity file used for authentication

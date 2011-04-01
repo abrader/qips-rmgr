@@ -1,17 +1,28 @@
 QIPS-RMGR
 
-Dependencies: Chef, Fog
+Dependencies: Chef, Fog, Right AWS >= v2.0.0
 
 Prerequisite: You need to fill out the following items in config/rmgr-config.rb:
 
 # Chef Config Items
 Chef::Config[:chef_server_url] = # This is the port 4000 address of your Chef Server API
-Chef::Config[:client_key] = #Client Key associated with client
-Chef::Config[:node_name] = #Name of client registered in Chef server
+Chef::Config[:validation_key] = # Location of the validation user .pem file
+Chef::Config[:validation_client_name] = # Name of the validation client, often "chef-validator"
+Chef::Config[:client_key] = # Client Key associated with client
+Chef::Config[:node_name] = # Name of client registered in Chef server
+Chef::Config[:web_ui_key] = # Location of the webui.pem, often /etc/chef
+Chef::Config[:web_ui_client_name] = # Name of the webui client, often "chef-webui"
 
 #AWS Config Items
-Chef::Config[:knife][:aws_access_key_id] = #AWS Access Key ID
-Chef::Config[:knife][:aws_secret_access_key] = #AWS Secret Access Key 
-Chef::Config[:knife][:image] = #AMI ID from EC2 that will be used for compute nodes
-Chef::Config[:knife][:security_groups] = #Security Group of compute nodes
-Chef::Config[:knife][:flavor] = #Instance Type of compute nodes
+Chef::Config[:knife][:aws_access_key_id] = # AWS Access Key ID
+Chef::Config[:knife][:aws_secret_access_key] = # AWS Secret Access Key 
+Chef::Config[:knife][:image] = # AMI ID from EC2 that will be used for compute nodes
+Chef::Config[:knife][:security_groups] = # Security Group of compute nodes
+Chef::Config[:knife][:flavor] = # Instance Type of compute nodes
+Chef::Config[:knife][:ssh_client_key] = # Location of SSH Client .pem file, used for connecting with EC2 clients.
+Chef::Config[:knife][:aws_ssh_key_id] = # EC2 setting, name of the keypair used with instances
+Chef::Config[:knife][:ssh_user] = # Name of user associated with keypair, on Ubuntu user is often "ubuntu"
+
+#Authentication
+QIPS_USER = { "admin" => "p@ssw@rd"}
+

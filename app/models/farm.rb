@@ -7,7 +7,7 @@ class Farm < ActiveRecord::Base
     begin
       num_instances.each do
         n = Node.new
-        n.start_by_spot_request(self.name, self.ami_id)
+        n.start_by_spot_request(self.name, self.ami_id, self.ami_type)
       end
     rescue => e
       puts e.backtrace

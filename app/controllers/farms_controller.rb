@@ -1,6 +1,9 @@
 class FarmsController < ApplicationController
   respond_to :html, :xml, :json
   
+  INSTANCE_TYPES_32 = ['m1.small', 'c1.medium']
+  INSTANCE_TYPES_64 = ['m1.large','m1.xlarge', 'c1.xlarge', 'm2.xlarge', 'm2.2xlarge', 'm2.4xlarge']
+  
   def index
     @farms = Farm.all
 
@@ -20,10 +23,21 @@ class FarmsController < ApplicationController
   end
 
   def edit
+    @instance_types
     @farm = Farm.find(params[:id])
     @roles = Role.get_roles
     
-    respond_with(@farm, @roles)
+    arch = Node.get_arch(@farm.ami_id)
+    
+    if arch == "i386"
+      @instance_types = INSTANCE_TYPES_32
+    else
+      @instance_types = INSTANCE_TYPES_64
+    end
+    
+    
+    
+    respond_with(@farm, @roles, @instance_types)
   end
   
   def update

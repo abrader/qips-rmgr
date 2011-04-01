@@ -9,9 +9,8 @@ class NodesController < ApplicationController
       @compute = Node.get_compute
       @ec2_instances = Node.get_ec2
     rescue => e
-      Chef::Log.error("#{e}\n#{e.backtrace.join("\n")}")
-      @_message = {:error => "Could not list nodes"}
-      {}
+      puts e.backtrace
+      Rails.logger.error("NodesController.index: Unable to display list of nodes.")
     end
     respond_with(@compute, @servers, @ec2_instances)
   end
@@ -25,7 +24,7 @@ class NodesController < ApplicationController
       end
     rescue => e
       puts e.backtrace
-      Rails.logger.error("Could not delete chef client and shutdown instance associated with #{params[:id]}")
+      Rails.logger.error("NodesController.destroy: Could not delete chef client and shutdown instance associated with #{params[:id]}")
       render :index
     end
   end

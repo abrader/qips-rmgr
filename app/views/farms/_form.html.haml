@@ -13,6 +13,18 @@
       = text_field :farm, :ami_id, :size => 12, :value => params.has_key?(:ami_id) ? h(params[:ami_id]) : @farm.ami_id
       %span.ami_id The Amazon Machine ID associated with this Farm
     .group.form
+      %label.label{:for => "farm_min"} Min
+      = text_field :farm, :min, :size => 2, :value => params.has_key?(:min) ? h(params[:min]) : @farm.min
+      %span.roles The minimum number of instances that should be running at all times that are associated with this farm
+    .group.form
+      %label.label{:for => "farm_max"} Max
+      = text_field :farm, :max, :size => 2, :value => params.has_key?(:max) ? h(params[:max]) : @farm.max
+      %span.roles The maximum number of instances that should be running at all times that are associated with this farm
+    .group.form
+      %label.label{:for => "farm_ami_type"} EC2 Type
+      = select :farm, :ami_type, options_for_select(@instance_types), :value => params.has_key?(:ami_type) ? h(params[:ami_type]) : @farm.ami_type
+      %span.roles The Amazon EC2 type (size) based on the AMI ID architecture
+    .group.form
       %label.label{:for => "farm_roles"} Roles
       = select :farm, :role, @roles.map {|r| [r.name, r.name]}, :value => params.has_key?(:role) ? h(params[:role]) : @farm.role
       %span.roles The roles associated with this Farm
