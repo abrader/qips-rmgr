@@ -9,7 +9,7 @@ gem 'sqlite3'
 gem 'haml'
 gem 'haml-rails'
 gem 'fog'
-gem 'chef'
+gem 'chef', "0.9.12"
 gem 'net-ssh-multi'
 gem 'right_aws', "2.0.0"
 

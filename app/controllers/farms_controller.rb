@@ -35,8 +35,6 @@ class FarmsController < ApplicationController
       @instance_types = INSTANCE_TYPES_64
     end
     
-    
-    
     respond_with(@farm, @roles, @instance_types)
   end
   
@@ -53,9 +51,10 @@ class FarmsController < ApplicationController
   def start
     begin
       @farm = Farm.find_by_name(params[:name])
-      @farm.start_instances(params[:num_instances])
+      @farm.start_instances(params[:num_instances].to_i)
       redirect_to farms_path, :notice => "Started #{params[:num_instances]} in #{params[:name]} successfully."
     rescue => e
+      puts e.backtrace
       Rails.logger.error("FarmsController.start: Unable to start #{params[:num_instances]} instances in #{params[:name]}")
       render :index
     end
@@ -69,7 +68,7 @@ class FarmsController < ApplicationController
     rescue => e
       puts e.backtrace
       @farms = Farm.all
-      @_message = {:error => "Could not delete farm #{params[:id]}"}
+      @_message = {:error => "Unable to delete farm #{params[:id]}"}
       render :index
     end
   end

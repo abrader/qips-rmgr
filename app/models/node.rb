@@ -181,23 +181,24 @@ class Node
     set_farm_attrib(farm_name)
   end
   
-  def set_run_list(farm_name)
-    begin
-      @role_name = Farm.find_by_name(farm_name).role
-      chef_role = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("roles/#{@role_name}")
-      chef_node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{@instance_id}")
-      chef_node.run_list = chef_role.run_list
-      chef_node.save
-    rescue
-      puts e.backtrace
-      Rails.logger.error("Nodes.bind_run_list: Unable to bind #{@role_name} to #{@instance_id}")
-    end
-  end
+  # def set_run_list(farm_name)
+  #     begin
+  #       @role_name = Farm.find_by_name(farm_name).role
+  #       chef_role = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("roles/#{@role_name}")
+  #       chef_node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{@instance_id}")
+  #       chef_node.run_list = chef_role.run_list
+  #       chef_node.save
+  #     rescue
+  #       puts e.backtrace
+  #       Rails.logger.error("Nodes.bind_run_list: Unable to bind #{@role_name} to #{@instance_id}")
+  #     end
+  #   end
   
   def set_farm_attrib(farm_name)
     begin
       node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{@instance_id}")
       node.attribute["qips_farm"] = farm_name
+      node.attribute["qips_status"] = "idle"
       node.save
     rescue
       Rails.logger.error("Node.set_farm_attrib: Unable to set attribute for #{farm_name} farm to #{@instance_id}")
@@ -298,20 +299,27 @@ class Node
   end
   
   def self.reconcile_nodes()
-    Node.get_compute.each do |comp|
-      instance = @@ec2.describe_instances(comp.ec2.instance_id)[0]
-      uptime_sec  = (Time.now.to_i - DateTime.parse(instance[:aws_launch_time]).to_i)
-      if (uptime_sec % (60 * 60)) >= 3120 # 3120 = 52 minutes * 60 secs
-        if self.cpu_util(comp.ec2.instance_id) < 0.2 then
-          Rails.logger.info("Node.reconcile_nodes: Shutting down #{comp.ec2.instance_id} due to inactivity.")
-          #Node.shutdown_instance(comp.ec2.instance_id)
+    #First we call Farm.min_max_check to shutdown nodes that aren't warranted by it's farm.
+    Farm.min_max_check
+    #Second we check if CPU is being used after 52 minutes since the instance was launched is up.  If so, shutdown instance.
+    begin
+      Node.get_compute.each do |comp|
+        instance = @@ec2.describe_instances(comp.ec2.instance_id)[0]
+        uptime_sec  = (Time.now.to_i - DateTime.parse(instance[:aws_launch_time]).to_i)
+        if (uptime_sec % (60 * 60)) >= 3120 # 3120 = 52 minutes * 60 secs
+          if self.cpu_util(comp.ec2.instance_id) < 0.2 then
+            Rails.logger.info("Node.reconcile_nodes: Shutting down #{comp.ec2.instance_id} due to inactivity.")
+            #Node.shutdown_instance(comp.ec2.instance_id)
+          else
+            Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to activity")
+          end
         else
-          Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to activity")
+          Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to incompatible interval")
         end
-      else
-        Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to incompatible interval")
       end
-    end    
+    rescue => e
+      Rails.logger.error("Node.reconcile_nodes: Unable to perform reconcile duties.")
+    end
   end
   
 end

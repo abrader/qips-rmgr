@@ -62,5 +62,6 @@
       %td= h ec2_instance["ami_id"]
       %td= h ec2_instance["state"]
       %td= h distance_of_time_in_words(0, ec2_instance["uptime_seconds"], true).capitalize
-      %td= link_to "Shutdown", shutdown_node_path(:id => ec2_instance["instance_id"]), :confirm => "Are you sure you want to shutdown the instance #{ec2_instance["instance_id"]}?"
+      - if ec2_instance["state"] == "pending" || ec2_instance["state"] == "running"
+        %td= link_to "Shutdown", shutdown_node_path(:id => ec2_instance["instance_id"]), :confirm => "Are you sure you want to shutdown the instance #{ec2_instance["instance_id"]}?"
 %br/
