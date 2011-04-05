@@ -39,13 +39,17 @@ class FarmsController < ApplicationController
   end
   
   def update
-    @farm = Farm.find(params[:id])
+    begin
+      @farm = Farm.find(params[:id])
     
-    if @farm.update_attributes(params[:farm])
-      redirect_to farms_path, :notice => "Farm #{@farm.name} was updated successfully."
-    else
-      render :action => "edit"
-    end 
+      if @farm.update_attributes(params[:farm])
+        redirect_to farms_path, :notice => "Farm #{@farm.name} was updated successfully."
+      else
+        render :action => "edit"
+      end
+    rescue
+      Rails.logger.error("FarmsController.update: Unable to update #{params[:id]}")
+    end
   end
   
   def start
@@ -53,8 +57,7 @@ class FarmsController < ApplicationController
       @farm = Farm.find_by_name(params[:name])
       @farm.start_instances(params[:num_instances].to_i)
       redirect_to farms_path, :notice => "Started #{params[:num_instances]} in #{params[:name]} successfully."
-    rescue => e
-      puts e.backtrace
+    rescue
       Rails.logger.error("FarmsController.start: Unable to start #{params[:num_instances]} instances in #{params[:name]}")
       render :index
     end
@@ -65,11 +68,23 @@ class FarmsController < ApplicationController
       @farm = Farm.find(params[:id])
       #@farm.destroy
       redirect_to farms_path, :notice => "Farm #{@farm.name} was deleted successfully."
-    rescue => e
-      puts e.backtrace
-      @farms = Farm.all
-      @_message = {:error => "Unable to delete farm #{params[:id]}"}
+    rescue
+      Rails.logger.error("FarmsController.destroy: Unable to delete farm #{params[:id]}")
       render :index
     end
   end
+  
+  def reconcile
+    begin
+      @resp = Farm.reconcile_nodes()
+      respond_to do |format|
+        format.xml  { head :ok }
+        format.json { head :ok }
+      end
+    rescue
+      Rails.logger.error("FarmsController.reconcile: Unable to reconcile nodes")
+      render :index
+    end
+  end
+  
 end

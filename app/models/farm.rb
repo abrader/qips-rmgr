@@ -13,7 +13,9 @@ class Farm < ActiveRecord::Base
         fm.start_instances(fm.min - num_running_instances)
       elsif (num_running_instances > fm.max)
         (num_running_instances - fm.max).times do
-         Node.shutdown_instance(fm.idle.shift)
+          if fm.idle.count > 0
+            Node.shutdown_instance(fm.idle.shift)
+          end
         end
       end
     end
@@ -57,14 +59,40 @@ class Farm < ActiveRecord::Base
     end
     instance_ids
   end
-    
   
+  def self.reconcile_nodes()
+    #First we call Farm.min_max_check to shutdown nodes that aren't warranted by it's farm.
+    Farm.min_max_check
+    #Second we check if CPU is being used after 52 minutes since the instance was launched is up.  If so, shutdown instance.
+    begin
+      Farm.find(:all).each do |farm|
+        farm.idle.each do |instance_id|
+          instance = @@ec2.describe_instances(instance_id)[0]
+          uptime_sec  = (Time.now.to_i - DateTime.parse(instance[:aws_launch_time]).to_i)
+          if (uptime_sec % (60 * 60)) >= 3120 # 3120 = 52 minutes * 60 secs
+            if self.cpu_util(comp.ec2.instance_id) < 10.0 then
+              Rails.logger.info("Node.reconcile_nodes: Shutting down #{comp.ec2.instance_id} due to inactivity.")
+              #Node.shutdown_instance(comp.ec2.instance_id)
+            else
+              Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to activity")
+            end
+          else
+            Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to incompatible interval")
+          end
+        end
+      end
+    rescue => e
+      Rails.logger.error("Farm.reconcile_nodes: Unable to perform reconcile duties.")
+    end
+  end
+    
   def start_instances(num_instances)
     if num_instances > 0
       begin
         num_instances.times do
-          n = Node.new
-          n.start_by_spot_request(self.name, self.ami_id, self.ami_type)
+          #n = Node.new
+          #n.start_by_spot_request(self.name, self.ami_id, self.ami_type)
+          Node.async_start_by_spot_request(self.name, self.ami_id, self.ami_type)
         end
       rescue => e
         puts e.backtrace
@@ -72,4 +100,5 @@ class Farm < ActiveRecord::Base
       end
     end
   end
+  
 end

@@ -3,6 +3,7 @@ class Node
   
   require 'chef/knife/bootstrap'
   require 'chef/knife/ssh'
+  require 'resque'
   
   DEFAULT_32_INSTANCE_TYPE = "m1.small"
   DEFAULT_64_INSTANCE_TYPE = "m1.large"
@@ -16,6 +17,8 @@ class Node
   @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
   
   @@acw = RightAws::AcwInterface.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
+  
+  @queue = :aws_spot_instance_requests
   
   def chef_server_rest
     Chef::REST.new(Chef::Config[:chef_server_url])
@@ -43,12 +46,13 @@ class Node
   end
   
   def self.cpu_util(instance_id)
-    stats = @@acw.get_metric_statistics(:start_time => (Time.now.utc - 6*60), :period => 60, :namespace => "AWS/EC2", :dimentions => {:InstanceId => instance_id}, :measure_name=>"CPUUtilization")
+    util_over_time = 10 # min
+    stats = @@acw.get_metric_statistics(:start_time => (Time.now.utc - (util_over_time * 60)), :period => 60, :namespace => "AWS/EC2", :dimentions => {:InstanceId => instance_id}, :measure_name=>"CPUUtilization")
     avg = 0.0
     stats[:datapoints].each do |stat|
-      avg + stat[:average]
+      avg = avg + stat[:average]
     end
-    avg = avg / 5
+    avg = avg / util_over_time
     avg
   end
   
@@ -113,7 +117,7 @@ class Node
     @nodes
   end
   
-  def start_by_spot_request(farm_name, image_id=Chef::Config[:knife][:image], ami_type=nil, spot_price=Chef::Config[:knife][:spot_price])
+  def start_by_spot_request(farm_name, image_id, ami_type, spot_price)
     # This is the AWS reduced cost spot request
     require 'net/ssh/multi'
     
@@ -174,37 +178,51 @@ class Node
     # Time to get that instance boostrapped with Chef-client
     instance_bootstrap(farm_name).run
     
-    # Now the chef-client is running on our instance, let's get it bound to it's role, this should get recipes flowing.
-    #set_run_list(farm_name)
-    
     # Set farm attribute so we can retrieve from OHAI later.
     set_farm_attrib(farm_name)
   end
   
-  # def set_run_list(farm_name)
-  #     begin
-  #       @role_name = Farm.find_by_name(farm_name).role
-  #       chef_role = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("roles/#{@role_name}")
-  #       chef_node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{@instance_id}")
-  #       chef_node.run_list = chef_role.run_list
-  #       chef_node.save
-  #     rescue
-  #       puts e.backtrace
-  #       Rails.logger.error("Nodes.bind_run_list: Unable to bind #{@role_name} to #{@instance_id}")
-  #     end
-  #   end
+  # Resque method called by Farm to instantiate a spot instance request via queue
+  def self.async_start_by_spot_request(farm_name, image_id=Chef::Config[:knife][:image], ami_type=nil, spot_price=Chef::Config[:knife][:spot_price])
+    Resque.enqueue(Node, farm_name, image_id, ami_type, spot_price)
+  end
+  
+  # Resque required method for calling start_by_spot_request via queue
+  def self.perform(farm_name, image_id, ami_type, spot_price)
+    n = Node.new
+    n.start_by_spot_request(farm_name, image_id, ami_type, spot_price)
+  end
   
   def set_farm_attrib(farm_name)
     begin
-      node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{@instance_id}")
-      node.attribute["qips_farm"] = farm_name
-      node.attribute["qips_status"] = "idle"
-      node.save
+      Node.set_farm_name(@instance_id, farm_name)
+      Node.set_qips_status(@instance_id, "idle")
     rescue
       Rails.logger.error("Node.set_farm_attrib: Unable to set attribute for #{farm_name} farm to #{@instance_id}")
     end
   end
+  
+  def self.set_farm_name(instance_id, farm_name)
+    begin
+      node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{instance_id}")
+      node.attribute["qips_farm"] = farm_name
+      node.save
+    rescue
+      Rails.logger.error("Node.set_farm_name: Unable to set #{instance_id} to farm #{farm_name}.")
+    end
+  end
+  
+  def self.set_qips_status(instance_id, status)
+    begin
+      node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{instance_id}")
+      node.attribute["qips_status"] = status
+      node.save
+    rescue
+      Rails.logger.error("Node.set_qips_status: Unable to set QIPS #{status} status for #{instance_id}.")
+    end
+  end
 
+  # Removes node from chef based on node name, in this case instance id from AWS
   def self.delete_chef_node(client_name)
     begin
       Chef::REST.new(Chef::Config[:chef_server_url]).delete_rest("nodes/#{client_name}")
@@ -213,6 +231,7 @@ class Node
     end
   end
   
+  # Removes client from chef based on client name, in this case instance id from AWS
   def self.delete_chef_client(client_name)
     begin
       Chef::REST.new(Chef::Config[:chef_server_url]).delete_rest("clients/#{client_name}")
@@ -221,12 +240,18 @@ class Node
     end
   end
   
+  # Removes node and client from Chef as well as uses Right AWS method for shutdown of instance
   def self.shutdown_instance(instance_id)
-    self.delete_chef_node(instance_id)
-    self.delete_chef_client(instance_id)
-    @@ec2.terminate_instances(instance_id)
+    begin
+      self.delete_chef_node(instance_id)
+      self.delete_chef_client(instance_id)
+      @@ec2.terminate_instances(instance_id)
+    rescue => e
+      Rails.logger.error("Node.shutdown_instance: Unable to shutdown #{instance_id} properly.")
+    end
   end
   
+  # Wrapper for Right AWS describe_spot_instance_requests method
   def self.describe_spot_instance_request(spot_request_id)
     @@ec2.describe_spot_instance_requests(spot_request_id)[0]
   end
@@ -295,30 +320,6 @@ class Node
       bootstrap
     rescue
       Rails.logger.error("Node.instance_bootstrap: Unable to boostrap instance #{@instance_id}")
-    end
-  end
-  
-  def self.reconcile_nodes()
-    #First we call Farm.min_max_check to shutdown nodes that aren't warranted by it's farm.
-    Farm.min_max_check
-    #Second we check if CPU is being used after 52 minutes since the instance was launched is up.  If so, shutdown instance.
-    begin
-      Node.get_compute.each do |comp|
-        instance = @@ec2.describe_instances(comp.ec2.instance_id)[0]
-        uptime_sec  = (Time.now.to_i - DateTime.parse(instance[:aws_launch_time]).to_i)
-        if (uptime_sec % (60 * 60)) >= 3120 # 3120 = 52 minutes * 60 secs
-          if self.cpu_util(comp.ec2.instance_id) < 0.2 then
-            Rails.logger.info("Node.reconcile_nodes: Shutting down #{comp.ec2.instance_id} due to inactivity.")
-            #Node.shutdown_instance(comp.ec2.instance_id)
-          else
-            Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to activity")
-          end
-        else
-          Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to incompatible interval")
-        end
-      end
-    rescue => e
-      Rails.logger.error("Node.reconcile_nodes: Unable to perform reconcile duties.")
     end
   end
   

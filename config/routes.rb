@@ -1,13 +1,23 @@
 QipsRmgr::Application.routes.draw do
-  resources :farms, :roles
+  resources :roles
   
-  resources :nodes do
+  resources :farms do
     collection do
       get 'reconcile'
     end
-    
+  end
+  
+  resources :nodes do
     member do
       get 'shutdown', :action => 'destroy'
+    end
+    
+    member do
+      get 'busy', :action => 'busy_status'
+    end
+    
+    member do
+      get 'idle', :action => 'idle_status'
     end
   end
   

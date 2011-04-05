@@ -9,6 +9,7 @@
     %th Security Groups
     %th Roles
     %th Uptime
+    %th CPU
     %th &nbsp;
     %th.last &nbsp;
   - @compute.each do |node|
@@ -21,6 +22,7 @@
       %td= h node.ec2.security_groups
       %td= h node.roles
       %td= h distance_of_time_in_words(0, node.uptime_seconds, true).capitalize
+      %td= h Node.cpu_util(node.ec2.instance_id)
       %td= link_to 'Edit', url_for(node.chef_url + '/edit')
       %td= link_to "Shutdown", shutdown_node_path(:id => node.ec2.instance_id), :confirm => "Are you sure you want to shutdown the instance #{node.ec2.instance_id}?"
 %br/
@@ -33,6 +35,7 @@
     %th AMI ID
     %th Reservation ID
     %th Uptime
+    %th CPU
     %th.last &nbsp;
   - @servers.each do |server|
     %tr.data_row
@@ -42,6 +45,7 @@
       %td= h server.ec2.ami_id
       %td= h server.ec2.reservation_id
       %td= h distance_of_time_in_words(0, server.uptime_seconds, true).capitalize
+      %td= h Node.cpu_util(server.ec2.instance_id)
       %td= link_to 'Edit', url_for(server.chef_url + '/edit')
 %br/
 %h1 EC2
