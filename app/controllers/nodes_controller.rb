@@ -5,14 +5,11 @@ class NodesController < ApplicationController
   
   def index
     begin
-      @servers = Node.get_servers
-      @compute = Node.get_compute
       @ec2_instances = Node.get_ec2
     rescue => e
-      puts e.backtrace
       Rails.logger.error("NodesController.index: Unable to display list of nodes.")
     end
-    respond_with(@compute, @servers, @ec2_instances)
+    respond_with(@ec2_instances)
   end
   
   def idle_status

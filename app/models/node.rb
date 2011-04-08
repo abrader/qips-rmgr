@@ -3,6 +3,7 @@ class Node
   
   require 'chef/knife/bootstrap'
   require 'chef/knife/ssh'
+  require 'chef/search/query'
   require 'resque'
   
   DEFAULT_32_INSTANCE_TYPE = "m1.small"
@@ -57,65 +58,32 @@ class Node
   end
   
   def self.get_ec2
-     @ec2_info = Array.new
+    @ec2_info = Array.new
 
-     @@connection.servers.all.each do |instance|
-       if self.instance_match(instance.id.to_s) == false
-         ec2_instance = Hash.new
-         ec2_instance["private_dns"] = instance.private_dns_name
-         ec2_instance["public_dns"] = instance.dns_name
-         ec2_instance["instance_id"] = instance.id.to_s
-         ec2_instance["ami_id"] = instance.image_id
-         ec2_instance["uptime_seconds"] = (Time.now.to_i - instance.created_at.to_i)
-         ec2_instance["state"] = instance.state
-         @ec2_info << ec2_instance
-       end
-     end
-     @ec2_info
-   end
+    @@connection.servers.all.each do |instance|
+      if self.instance_match(instance.id.to_s) == false
+        ec2_instance = Hash.new
+        ec2_instance["private_dns"] = instance.private_dns_name
+        ec2_instance["public_dns"] = instance.dns_name
+        ec2_instance["instance_id"] = instance.id.to_s
+        ec2_instance["ami_id"] = instance.image_id
+        ec2_instance["uptime_seconds"] = (Time.now.to_i - instance.created_at.to_i)
+        ec2_instance["state"] = instance.state
+        @ec2_info << ec2_instance
+      end
+    end
+    @ec2_info
+  end
    
-   #Check to see if an instance_id already exists in local record
-   def self.instance_match(instance_id)
-     self.get_servers().each do |node|
-       if instance_id == node.ec2.instance_id then
-         return true
-       end
-     end
-     self.get_compute().each do |node|
-       if instance_id == node.ec2.instance_id then
-         return true
-       end
-     end
-     false
-   end  
-  
-  # Return an array of system information pertaining to servers only
-  def self.get_servers
-    @servers = Array.new
-    self.list().each do |name, sys_url|
-      currrent_sys = self.load(name)
-      if currrent_sys.ec2.security_groups[0] =~ /www/
-        currrent_sys.chef_url = sys_url.gsub(/4000/, '4040')
-        currrent_sys.save
-        @servers << currrent_sys
+  #Check to see if an instance_id already exists in local record
+  def self.instance_match(instance_id)
+    Node.list().each do |node_name, sys_url|
+      if instance_id == Node.load(node_name).ec2.instance_id
+        return true
       end
     end
-    @servers
-  end
-  
-  # Return an array of system information pertaining to compute nodes only
-  def self.get_compute
-    @nodes = Array.new
-    self.list().each do |name, sys_url|
-      currrent_sys = self.load(name)
-      if currrent_sys.ec2.security_groups[0] =~ /compute/
-        currrent_sys.chef_url = sys_url.gsub(/4000/, '4040')
-        currrent_sys.save
-        @nodes << currrent_sys
-      end
-    end
-    @nodes
-  end
+    false
+  end  
   
   def start_by_spot_request(farm_name, image_id, ami_type, spot_price)
     # This is the AWS reduced cost spot request
@@ -212,14 +180,33 @@ class Node
     end
   end
   
+  # Sets QIPS status, extra step due to non-compliance of instance_id == node name
   def self.set_qips_status(instance_id, status)
     begin
-      node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{instance_id}")
+      node_name = Node.query_chef("node", "instance_id", instance_id)[0].name
+      node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{node_name}")
       node.attribute["qips_status"] = status
       node.save
     rescue
       Rails.logger.error("Node.set_qips_status: Unable to set QIPS #{status} status for #{instance_id}.")
     end
+  end
+  
+  def self.query_chef(model_type, attribute, search)
+    # Returns instance ids associated with instances running from this farm.
+    instance_ids = Array.new
+    q = Chef::Search::Query.new
+    query = "#{attribute}:\"#{search}\""
+    
+    begin
+      q.search(model_type, query)[0].each do |instance|
+        instance_ids << instance
+      end
+    rescue Net::HTTPServerException => e
+      Rails.logger.error("Node.query_chef(#{attribute}:#{search}): Chef API search failed")
+      exit 1
+    end
+    instance_ids
   end
 
   # Removes node from chef based on node name, in this case instance id from AWS

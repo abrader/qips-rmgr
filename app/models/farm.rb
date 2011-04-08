@@ -24,7 +24,7 @@ class Farm < ActiveRecord::Base
   def idle()
     # Returns instance ids of instances that are in an idle state from this farm.
     instance_ids = Array.new
-    query_array = query_chef("node", "qips_status","idle")
+    query_array = Node.query_chef("node", "qips_status","idle")
     query_array.each do |instance|
       if instance["qips_farm"] == self.name
         instance_ids << instance.ec2.instance_id
@@ -36,26 +36,9 @@ class Farm < ActiveRecord::Base
   def running_instances()
     # Returns instance ids associated with instances running from this farm.
     instance_ids = Array.new
-    query_array = query_chef("node", "qips_farm", self.name)
+    query_array = Node.query_chef("node", "qips_farm", self.name)
     query_array.each do |instance|
       instance_ids << instance.ec2.instance_id
-    end
-    instance_ids
-  end
-  
-  def query_chef(model_type, attribute, search)
-    # Returns instance ids associated with instances running from this farm.
-    instance_ids = Array.new
-    q = Chef::Search::Query.new
-    query = "#{attribute}:\"#{search}\""
-    
-    begin
-      q.search(model_type, query)[0].each do |instance|
-        instance_ids << instance
-      end
-    rescue Net::HTTPServerException => e
-      Rails.logger.error("Farm.query_chef(#{self.name}): Chef API search failed")
-      exit 1
     end
     instance_ids
   end

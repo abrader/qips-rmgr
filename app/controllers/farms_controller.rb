@@ -11,13 +11,36 @@ class FarmsController < ApplicationController
   end
   
   def new
-    @farm = Farm.new()
-    if @farm.save
-      redirect_to farms_path, :notice => "Successfully created a farm."
-    else
-      render :action => 'new'
+    @instance_types = INSTANCE_TYPES_32 + INSTANCE_TYPES_64
+    @roles = Role.get_roles
+    @farm = Farm.new
+
+    respond_to do |format|
+      format.html # new.html.erb
+      format.xml  { render :xml => @farm }
     end
   end
+  
+  def create
+    @instance_types = INSTANCE_TYPES_32 + INSTANCE_TYPES_64
+    @roles = Role.get_roles
+    @farm = Farm.new(params[:farm])
+
+    begin
+      @farm.save
+      respond_to do |format|
+        format.html { redirect_to(@farm, :notice => 'Farm was successfully created.') }
+        format.xml  { render :xml => @farm, :status => :created, :location => @farm }
+      end
+    rescue => e
+      Rails.logger.error("FarmsController.create: Unable to create new farm: #{e.backtrace}")
+      respond_to do |format|
+        format.html { render :action => "new" }
+        format.xml  { render :xml => @farm.errors, :status => :unprocessable_entity }
+      end
+    end
+  end
+  
 
   def show
   end
