@@ -82,7 +82,7 @@ class Node
         return true
       end
     end
-    false
+    return false
   end  
   
   def start_by_spot_request(farm_name, image_id, ami_type, spot_price)
@@ -172,7 +172,8 @@ class Node
   
   def self.set_farm_name(instance_id, farm_name)
     begin
-      node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{instance_id}")
+      node_name = Node.query_chef("node", "instance_id", instance_id)[0].name
+      node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{node_name}")
       node.attribute["qips_farm"] = farm_name
       node.save
     rescue

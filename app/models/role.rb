@@ -1,4 +1,4 @@
-class Role < ActiveRecord::Base
+class Role
   
    def chef_server_rest
      Chef::REST.new(Chef::Config[:chef_server_url])
