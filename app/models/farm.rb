@@ -8,7 +8,7 @@ class Farm < ActiveRecord::Base
   def self.min_max_check()
     #Cycle through farms, take note of min max, then check state of each farm to insure compliance.
     Farm.find(:all).each do |fm|
-      num_running_instances = fm.running_instances.count
+      num_running_instances = fm.running_instances.length
       if (num_running_instances < fm.min)
         fm.start_instances(fm.min - num_running_instances)
       elsif (num_running_instances > fm.max)
@@ -35,12 +35,7 @@ class Farm < ActiveRecord::Base
     
   def running_instances()
     # Returns instance ids associated with instances running from this farm.
-    instance_ids = Array.new
-    query_array = Node.query_chef("node", "qips_farm", self.name)
-    query_array.each do |instance|
-      instance_ids << instance.ec2.instance_id
-    end
-    instance_ids
+    Node.query_chef("node", "qips_farm", self.name)
   end
   
   def self.reconcile_nodes()

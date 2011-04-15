@@ -146,8 +146,11 @@ class Node
     # Time to get that instance boostrapped with Chef-client
     instance_bootstrap(farm_name).run
     
-    # Set farm attribute so we can retrieve from OHAI later.
-    set_farm_attrib(farm_name)
+    # Set attributes so we can retrieve from OHAI later.
+    sleep(15)
+    Node.set_farm_name(@instance_id, farm_name)
+    Node.set_qips_status(@instance_id, "idle")
+    Node.set_chef_url()
   end
   
   # Resque method called by Farm to instantiate a spot instance request via queue
@@ -161,35 +164,64 @@ class Node
     n.start_by_spot_request(farm_name, image_id, ami_type, spot_price)
   end
   
-  def set_farm_attrib(farm_name)
+  def self.set_chef_url()
     begin
-      Node.set_farm_name(@instance_id, farm_name)
-      Node.set_qips_status(@instance_id, "idle")
-    rescue
-      Rails.logger.error("Node.set_farm_attrib: Unable to set attribute for #{farm_name} farm to #{@instance_id}")
+      Node.list().each do |name,node_url|
+        current_node = Node.load(name)
+        current_node.attribute["chef_url"] = node_url.gsub(/4000/, '4040')
+        current_node.save
+      end
+    rescue => e
+      puts e.backtrace
+      Rails.logger.error("Node.set_farm_name: Unable to set chef_url on chef aware nodes")
     end
   end
   
   def self.set_farm_name(instance_id, farm_name)
     begin
-      node_name = Node.query_chef("node", "instance_id", instance_id)[0].name
+      node_name = Node.id_to_name(instance_id)
+      if node_name.nil?
+        Rails.logger.error("Node.set_farm_name: #{instance_id} does not exist")
+        exit
+      end
       node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{node_name}")
+      if node.nil?
+        Rails.logger.error("Node.set_farm_name: get_rest failed for #{node_name}.")
+      end
       node.attribute["qips_farm"] = farm_name
       node.save
-    rescue
-      Rails.logger.error("Node.set_farm_name: Unable to set #{instance_id} to farm #{farm_name}.")
+    rescue => e
+      Rails.logger.error("Node.set_farm_name: Unable to set #{instance_id} to farm #{farm_name}. --- #{e.backtrace}")
     end
   end
   
   # Sets QIPS status, extra step due to non-compliance of instance_id == node name
   def self.set_qips_status(instance_id, status)
     begin
-      node_name = Node.query_chef("node", "instance_id", instance_id)[0].name
+      node_name = Node.id_to_name(instance_id)
+      if node_name.nil?
+        Rails.logger.error("Node.set_qips_status: #{instance_id} does not exist")
+        exit
+      end
       node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{node_name}")
       node.attribute["qips_status"] = status
       node.save
     rescue
-      Rails.logger.error("Node.set_qips_status: Unable to set QIPS #{status} status for #{instance_id}.")
+      Rails.logger.error("Node.set_qips_status: Unable to set #{status} status for #{instance_id}.")
+    end
+  end
+  
+  def self.id_to_name(instance_id)
+    begin
+      q = Chef::Search::Query.new
+      query = "instance_id:#{instance_id}"
+
+      q.search("node", query)[0].each do |instance|
+        return instance.name
+      end
+      return nil
+    rescue => e
+      Rails.logger.error("Node.id_to_name: Unable to search chef server for #{instance_id}")
     end
   end
   
@@ -211,10 +243,11 @@ class Node
   end
 
   # Removes node from chef based on node name, in this case instance id from AWS
-  def self.delete_chef_node(client_name)
+  def self.delete_chef_node(node_name)
     begin
-      Chef::REST.new(Chef::Config[:chef_server_url]).delete_rest("nodes/#{client_name}")
+      Chef::REST.new(Chef::Config[:chef_server_url]).delete_rest("nodes/#{node_name}")
     rescue Net::HTTPServerException
+      Rails.logger.error("Node.delete_chef_node: Unable to delete chef node #{instance_id}")
       false
     end
   end
@@ -224,6 +257,7 @@ class Node
     begin
       Chef::REST.new(Chef::Config[:chef_server_url]).delete_rest("clients/#{client_name}")
     rescue Net::HTTPServerException
+      Rails.logger.error("Node.delete_chef_client: Unable to delete chef client #{instance_id}")
       false
     end
   end
@@ -231,8 +265,9 @@ class Node
   # Removes node and client from Chef as well as uses Right AWS method for shutdown of instance
   def self.shutdown_instance(instance_id)
     begin
-      self.delete_chef_node(instance_id)
-      self.delete_chef_client(instance_id)
+      node_client_name = Node.id_to_name(instance_id)
+      self.delete_chef_node(node_client_name)
+      self.delete_chef_client(node_client_name)
       @@ec2.terminate_instances(instance_id)
     rescue => e
       Rails.logger.error("Node.shutdown_instance: Unable to shutdown #{instance_id} properly.")
@@ -252,6 +287,7 @@ class Node
       instance = @@ec2.describe_instances(@instance_id)[0]
       @aws_state = instance[:aws_state]
       @hostname = instance[:dns_name]
+      return true
     end    
   end
   

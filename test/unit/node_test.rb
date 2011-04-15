@@ -90,5 +90,47 @@ class NodeTest < Test::Unit::TestCase
     assert_instance_of(Array, result, "Is not an array as expected")
     assert(result[0].name == chef_node.name, "Does not have the node name we expected")
   end
+  
+  # def test_delete_client
+  #  # Create a node just to test our delete_node method
+  #  begin
+  #    test_client_name = "simonsays"
+  #    test_client = Chef::ApiClient.new()
+  #    test_client.name(test_client_name)
+  #    test_client.save(true, false)
+  #    
+  #    # Actual Test
+  #    Node.delete_chef_node(test_client_name)
+  #   
+  #    # Assertion
+  #    assert(Node.query_chef("client", "name", test_client_name) == nil)
+  #  rescue => e
+  #    puts e.backtrace
+  #  end
+  # end
+  
+  
+  def test_delete_node
+   # Create a node just to test our delete_node method
+   begin
+     test_node_name = "simonsays"
+     test_node = Chef::Node.new()
+     test_node.name(test_node_name)
+     test_node.create
+     
+     # Actual Test
+     Node.delete_chef_node(test_node_name)
+    
+     # Assertion
+     assert(Node.query_chef("node", "name", test_node_name).empty?)
+   rescue => e
+     #puts e.backtrace
+   end
+  end
+  
+  def test_get_arch
+    assert(Node.get_arch("ami-f0e20899") == "i386")
+    assert(Node.get_arch("ami-fae20893") == "x86_64")
+  end
       
 end
