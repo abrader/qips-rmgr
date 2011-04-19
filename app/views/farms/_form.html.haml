@@ -22,7 +22,7 @@
       %span.roles The maximum number of instances that should be running at all times that are associated with this farm
     .group.form
       %label.label{:for => "farm_ami_type"} EC2 Type
-      = select :farm, :ami_type, options_for_select(@instance_types), :value => params.has_key?(:ami_type) ? h(params[:ami_type]) : @farm.ami_type
+      = select :farm, :ami_type, options_for_select(@instance_types, @farm.ami_type)
       %span.roles The Amazon EC2 type (size) based on the AMI ID architecture
     .group.form
       %label.label{:for => "farm_roles"} Roles

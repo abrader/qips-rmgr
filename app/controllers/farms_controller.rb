@@ -29,7 +29,7 @@ class FarmsController < ApplicationController
     begin
       @farm.save
       respond_to do |format|
-        format.html { redirect_to(@farm, :notice => 'Farm was successfully created.') }
+        format.html { redirect_to(farms_path, :notice => 'Farm was successfully created.') }
         format.xml  { render :xml => @farm, :status => :created, :location => @farm }
       end
     rescue => e
@@ -39,10 +39,6 @@ class FarmsController < ApplicationController
         format.xml  { render :xml => @farm.errors, :status => :unprocessable_entity }
       end
     end
-  end
-  
-
-  def show
   end
 
   def edit
@@ -89,8 +85,8 @@ class FarmsController < ApplicationController
   def destroy
     begin
       @farm = Farm.find(params[:id])
-      #@farm.destroy
-      redirect_to farms_path, :notice => "Farm #{@farm.name} was deleted successfully."
+      @farm.destroy
+      redirect_to(farms_path, :notice => "Farm #{@farm.name} was deleted successfully.")
     rescue
       Rails.logger.error("FarmsController.destroy: Unable to delete farm #{params[:id]}")
       render :index

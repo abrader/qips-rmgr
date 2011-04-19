@@ -293,7 +293,12 @@ class Node
   
   # Returns i386 or x86_64, require Amazon Image ID
   def self.get_arch(ami_id)
-    @@ec2.describe_images(ami_id)[0][:aws_architecture]
+    begin
+      @@ec2.describe_images(ami_id)[0][:aws_architecture]
+    rescue
+      Rails.logger.error("Node.get_arch: Unable to retrieve architecture for #{ami_id}. Most likely invalid AMI ID.")
+      return "i386"
+    end
   end
   
   def self.wait_for_ssh(host)
