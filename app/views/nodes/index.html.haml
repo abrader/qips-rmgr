@@ -1,33 +1,34 @@
 %h1 Farms
 %br/
 - Farm.find(:all).each do |farm|
-  %h3= h farm.name
-  %table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
-    %tr{:bgcolor => "#669900"}
-      %th.first Name
-      %th Hostname
-      %th Instance ID
-      %th AMI ID
-      %th Reservation ID
-      %th Security Groups
-      %th Roles
-      %th Uptime
-      %th CPU
-      %th &nbsp;
-      %th.last &nbsp; 
-    - farm.running_instances.each do |node|
-      %tr.data_row
-        %td= link_to node.name, url_for(node.chef_url) unless node.nil?
-        %td= h node.ec2.public_hostname unless node.nil?
-        %td= h node.ec2.instance_id unless node.nil?
-        %td= h node.ec2.ami_id unless node.nil?
-        %td= h node.ec2.reservation_id unless node.nil?
-        %td= h node.ec2.security_groups unless node.nil?
-        %td= h farm.role
-        %td= h distance_of_time_in_words(0, node.uptime_seconds, true).capitalize unless node.nil?
-        %td= h Node.cpu_util(node.ec2.instance_id) unless node.nil?
-        %td= link_to 'Edit', url_for(node.chef_url + '/edit') unless node.nil?
-        %td= link_to "Shutdown", shutdown_node_path(:id => node.ec2.instance_id), :confirm => "Are you sure you want to shutdown the instance #{node.ec2.instance_id}?" unless node.nil? || farm.name == "Chef Server"
+  - if farm.running_instances.size > 0
+    %h3= h farm.name
+    %table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
+      %tr{:bgcolor => "#669900"}
+        %th.first Name
+        %th Hostname
+        %th Instance ID
+        %th AMI ID
+        %th Reservation ID
+        %th Security Groups
+        %th Roles
+        %th Uptime
+        %th CPU
+        %th &nbsp;
+        %th.last &nbsp; 
+      - farm.running_instances.each do |node|
+        %tr.data_row
+          %td= link_to node.name, url_for(node.chef_url) unless node.nil?
+          %td= h node.ec2.public_hostname unless node.nil?
+          %td= h node.ec2.instance_id unless node.nil?
+          %td= h node.ec2.ami_id unless node.nil?
+          %td= h node.ec2.reservation_id unless node.nil?
+          %td= h node.ec2.security_groups unless node.nil?
+          %td= h farm.role
+          %td= h distance_of_time_in_words(0, node.uptime_seconds, true).capitalize unless node.nil?
+          %td= h Node.cpu_util(node.ec2.instance_id) unless node.nil?
+          %td= link_to 'Edit', url_for(node.chef_url + '/edit') unless node.nil?
+          %td= link_to "Shutdown", shutdown_node_path(:id => node.ec2.instance_id), :confirm => "Are you sure you want to shutdown the instance #{node.ec2.instance_id}?" unless node.nil? || farm.name == "Chef Server"
 %br/
 %br/
 %hr/
