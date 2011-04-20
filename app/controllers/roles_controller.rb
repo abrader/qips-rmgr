@@ -5,9 +5,7 @@ class RolesController < ApplicationController
     begin
       @roles = Role.get_roles
     rescue => e
-      Chef::Log.error("#{e}\n#{e.backtrace.join("\n")}")
-      @_message = {:error => "Could not list roles"}
-      {}
+      Rails.logger.error("RolesController: Unable to get list of roles from Chef server [#{Chef::Config[:chef_server_url]}]")
     end
     respond_with(@roles)
   end

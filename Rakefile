@@ -3,5 +3,10 @@
 
 require File.expand_path('../config/application', __FILE__)
 require 'rake'
+require 'resque/tasks'
+
+load 'tasks/redis.rake'
+
+task "resque:setup" => :environment
 
 QipsRmgr::Application.load_tasks

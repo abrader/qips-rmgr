@@ -1,13 +1,20 @@
 # Read about fixtures at http://ar.rubyonrails.org/classes/Fixtures.html
 
 one:
-  name: MyString
-  description: MyString
-  ami_id: MyString
-  role: MyString
+  name: Test_Farm_1
+  description: Hate you first
+  ami_id: ami-f0e20899
+  role: Another_Test_Role
+  min: 0
+  max: 1
+  ami_type: c1.medium
+      
 
 two:
-  name: MyString
-  description: MyString
-  ami_id: MyString
-  role: MyString
+  name: Test_Farm_2
+  description: Hate you as well
+  ami_id: ami-fae20893
+  role: Test_Role
+  min: 0
+  max: 1
+  ami_type: m1.xlarge

@@ -8,10 +8,13 @@ gem 'rails', '3.0.4'
 gem 'sqlite3'
 gem 'haml'
 gem 'haml-rails'
-gem 'fog'
-gem 'chef'
 gem 'net-ssh-multi'
+gem 'fog', "0.5.2"
+gem 'chef', "0.9.12"
 gem 'right_aws', "2.0.0"
+gem 'resque', "1.15.0"
+gem 'system_timer', "1.0"
+gem 'god', "0.11.0"
 
 # Use unicorn as the web server
 # gem 'unicorn'

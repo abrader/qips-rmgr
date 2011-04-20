@@ -5,34 +5,48 @@ class NodesController < ApplicationController
   
   def index
     begin
-      @servers = Node.get_servers
-      @compute = Node.get_compute
       @ec2_instances = Node.get_ec2
     rescue => e
-      Chef::Log.error("#{e}\n#{e.backtrace.join("\n")}")
-      @_message = {:error => "Could not list nodes"}
-      {}
+      Rails.logger.error("NodesController.index: Unable to display list of nodes.")
     end
-    respond_with(@compute, @servers, @ec2_instances)
+    respond_with(@ec2_instances)
+  end
+  
+  def idle_status
+    begin
+      Node.set_qips_status(params[:id], "idle")
+      respond_to do |format|
+        format.xml  { head :ok }
+        format.json  { head :ok }
+      end
+    rescue
+      Rails.logger.error("NodesController.idle_status: Unable to set #{params[:id]} to idle status.")
+    end
+  end
+  
+  def busy_status
+    begin
+      Node.set_qips_status(params[:id], "busy")
+      respond_to do |format|
+        format.xml  { head :ok }
+        format.json  { head :ok }
+      end
+    rescue
+      Rails.logger.error("NodesController.busy_status: Unable to set #{params[:id]} to busy status.")
+    end
   end
   
   def destroy
     begin
-      if params[:instance_id] then
-        @instance_id = params[:instance_id]
+      if params[:id] then
+        @instance_id = params[:id]
         Node.shutdown_instance(@instance_id)
         redirect_to nodes_url, :notice => "#{@instance_id} was shutdown successfully."
       end
     rescue => e
       puts e.backtrace
-      @_message = {:error => "Could not delete chef client and shutdown instance associated with #{:instance_id}"}
-      {}
-    end
-  end
-  
-  def reconcile
-    begin
-    rescue
+      Rails.logger.error("NodesController.destroy: Could not delete chef client and shutdown instance associated with #{params[:id]}")
+      render :index
     end
   end
 end
