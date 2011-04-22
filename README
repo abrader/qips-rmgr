@@ -13,12 +13,13 @@ Chef::Config[:node_name] = # Name of client registered in Chef server
 Chef::Config[:web_ui_key] = # Location of the webui.pem, often /etc/chef
 Chef::Config[:web_ui_client_name] = # Name of the webui client, often "chef-webui"
 
-#AWS Config Items
+# AWS Config Items
 Chef::Config[:knife][:aws_access_key_id] = # AWS Access Key ID
 Chef::Config[:knife][:aws_secret_access_key] = # AWS Secret Access Key 
 Chef::Config[:knife][:image] = # AMI ID from EC2 that will be used for compute nodes
 Chef::Config[:knife][:security_groups] = # Security Group of compute nodes
 Chef::Config[:knife][:flavor] = # Instance Type of compute nodes
+# The PEM file below should be set with 0400 permissions
 Chef::Config[:knife][:ssh_client_key] = # Location of SSH Client .pem file, used for connecting with EC2 clients.
 Chef::Config[:knife][:aws_ssh_key_id] = # EC2 setting, name of the keypair used with instances
 Chef::Config[:knife][:ssh_user] = # Name of user associated with keypair, on Ubuntu user is often "ubuntu"

@@ -90,6 +90,7 @@ class Node
     require 'net/ssh/multi'
     
     instance = nil
+    launch_group = nil
     
     if ami_type == nil
       arch = Node.get_arch(image_id)
@@ -100,13 +101,19 @@ class Node
       end
     end
     
+    if RAILS_ENV == "development"
+      launch_group = "QIPS_dev"
+    else
+      launch_group = "QIPS_prod"
+    end
+    
     sir = @@ec2.request_spot_instances(
             :image_id => image_id,
             :spot_price => spot_price,
             :key_name => Chef::Config[:knife][:aws_ssh_key_id],
             :instance_count => 1,
             :monitoring_enabled => true,
-            :launch_group => 'QIPS_dev',
+            :launch_group => launch_group,
             :groups => Chef::Config[:knife][:security_groups],
             :instance_type => ami_type
     )
@@ -265,11 +272,11 @@ class Node
   # Removes node and client from Chef as well as uses Right AWS method for shutdown of instance
   def self.shutdown_instance(instance_id)
     begin
+      @@ec2.terminate_instances(instance_id)
       node_client_name = Node.id_to_name(instance_id)
       self.delete_chef_node(node_client_name)
       self.delete_chef_client(node_client_name)
-      @@ec2.terminate_instances(instance_id)
-    rescue => e
+    rescue
       Rails.logger.error("Node.shutdown_instance: Unable to shutdown #{instance_id} properly.")
     end
   end
