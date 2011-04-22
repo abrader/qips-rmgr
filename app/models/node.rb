@@ -90,7 +90,6 @@ class Node
     require 'net/ssh/multi'
     
     instance = nil
-    launch_group = nil
     
     if ami_type == nil
       arch = Node.get_arch(image_id)
@@ -101,11 +100,7 @@ class Node
       end
     end
     
-    if RAILS_ENV == "development"
-      launch_group = "QIPS_dev"
-    else
-      launch_group = "QIPS_prod"
-    end
+    launch_group = ("QIPS_" + Rails.env).to_s
     
     sir = @@ec2.request_spot_instances(
             :image_id => image_id,
@@ -151,7 +146,7 @@ class Node
     sleep(45)
 
     # Time to get that instance boostrapped with Chef-client
-    instance_bootstrap(farm_name).run
+    self.instance_bootstrap(farm_name).run
     
     # Set attributes so we can retrieve from OHAI later.
     sleep(15)
