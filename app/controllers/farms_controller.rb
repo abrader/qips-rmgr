@@ -74,23 +74,12 @@ class FarmsController < ApplicationController
   def start
     begin
       @farm = Farm.find_by_name(params[:name])
-      @farm.start_instances(params[:num_instances].to_i)
-      redirect_to farms_path, :notice => "Started #{params[:num_instances]} in #{params[:name]} successfully."
-    rescue
-      Rails.logger.error("FarmsController.start: Unable to start #{params[:num_instances]} instances in #{params[:name]}")
-      render :index
-    end
-  end
-  
-  def start
-    begin
-      @farm = Farm.find_by_name(params[:name])
       @farm.start_instances(params[:num_instances])
-      redirect_to farms_path, :notice => "Started #{params[:num_instances]} of #{@farm.name}."
+      redirect_to farms_path, :notice => "Started #{params[:num_instances]} instance(s) of #{@farm.name}."
     rescue => e
       puts e.backtrace
-      @_message = {:error => "Unable to start #{params[:num_instances]} of #{@farm.name}"}
-      render :index
+      Rails.logger.error("Unable to start #{params[:num_instances]} of #{@farm.name}")
+      redirect_to farms_path, :notice => "Unable to start #{params[:num_instances]} instnace(s) of #{@farm.name}."
     end
   end
 

@@ -9,12 +9,12 @@ gem 'sqlite3'
 gem 'haml'
 gem 'haml-rails'
 gem 'net-ssh-multi'
-gem 'fog', "0.5.2"
+gem 'fog', "0.7.2"
 gem 'chef', "0.9.12"
 gem 'right_aws', "2.0.0"
 gem 'resque', "1.15.0"
 gem 'system_timer', "1.0"
-gem 'god', "0.11.0"
+gem 'god', "0.11.0", :require => false
 
 # Use unicorn as the web server
 # gem 'unicorn'

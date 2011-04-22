@@ -24,3 +24,5 @@ QipsRmgr::Application.routes.draw do
   match "farms/start/:name/:num_instances" => "farms#start", :as => 'farm_start'
   
   root :to => "farms#index"
+  
+end
