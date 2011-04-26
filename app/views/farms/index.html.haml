@@ -8,6 +8,8 @@
     %th Min
     %th Max
     %th EC2 Type
+    %th Keypair
+    %th Availability Zone
     %th.last &nbsp;
   - @farms.each do |farm|
     %tr.data_row
@@ -18,6 +20,8 @@
       %td= h farm.min
       %td= h farm.max
       %td= h farm.ami_type
+      %td= h farm.keypair
+      %td= h farm.avail_zone
       %td= link_to 'Destroy', farm_path(farm), :method => 'delete', :confirm => "Are you sure you want to delete the farm titled #{farm.name}?"
 %br/
 = link_to 'Create a new farm', new_farm_path

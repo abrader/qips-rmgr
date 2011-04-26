@@ -19,7 +19,7 @@ Chef::Config[:knife][:aws_secret_access_key] = # AWS Secret Access Key
 Chef::Config[:knife][:image] = # AMI ID from EC2 that will be used for compute nodes
 Chef::Config[:knife][:security_groups] = # Security Group of compute nodes
 Chef::Config[:knife][:flavor] = # Instance Type of compute nodes
-# The PEM file below should be set with 0400 permissions
+# The PEM file below should be set with 0600 permissions
 Chef::Config[:knife][:ssh_client_key] = # Location of SSH Client .pem file, used for connecting with EC2 clients.
 Chef::Config[:knife][:aws_ssh_key_id] = # EC2 setting, name of the keypair used with instances
 Chef::Config[:knife][:ssh_user] = # Name of user associated with keypair, on Ubuntu user is often "ubuntu"

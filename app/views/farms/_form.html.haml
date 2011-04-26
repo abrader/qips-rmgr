@@ -29,4 +29,12 @@
       = select :farm, :role, @roles.map {|r| [r.name, r.name]}, :value => params.has_key?(:role) ? h(params[:role]) : @farm.role
       %span.roles The roles associated with this Farm
     .group.form
+      %label.label{:for => "farm_keypair"} Key Pair
+      = text_field :farm, :keypair, :value => params.has_key?(:keypair) ? h(params[:keypair]) : @farm.keypair
+      %span.roles The keypair to be used with this Farm
+    .group.form
+      %label.label{:for => "farm_avail_zone"} Availability Zone
+      = text_field :farm, :avail_zone, :value => params.has_key?(:avail_zone) ? h(params[:avail_zone]) : @farm.avail_zone
+      %span.roles The availability zone where this farm will be instantiated
+    .group.form
       = f.submit "Commit"
