@@ -34,7 +34,7 @@
       %span.roles The keypair to be used with this Farm
     .group.form
       %label.label{:for => "farm_avail_zone"} Availability Zone
-      = text_field :farm, :avail_zone, :value => params.has_key?(:avail_zone) ? h(params[:avail_zone]) : @farm.avail_zone
+      = select :farm, :avail_zone, options_for_select(@availability_zones, @farm.avail_zone)
       %span.roles The availability zone where this farm will be instantiated
     .group.form
       = f.submit "Commit"

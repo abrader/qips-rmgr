@@ -1,6 +1,6 @@
 QIPS-RMGR
 
-Dependencies: Chef, Fog, SystemTimer, God >= 0.11.0, Resque >= 1.15.0 Right AWS >= v2.0.0
+Dependencies: Chef = 0.9.16, Fog = 0.7.2, SystemTimer (For Ruby <= 1.8.7), God >= 0.11.0, Resque >= 1.15.0 Right AWS >= v2.0.0
 
 Prerequisite: You need to fill out the following items in config/rmgr-config.rb:
 

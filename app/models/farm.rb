@@ -68,9 +68,7 @@ class Farm < ActiveRecord::Base
     if num_instances.to_i > 0
       begin
         num_instances.to_i.times do
-          #n = Node.new
-          #n.start_by_spot_request(self.name, self.ami_id, self.ami_type)
-          Node.async_start_by_spot_request(self.name, self.ami_id, self.ami_type)
+          Node.async_start_by_spot_request(self.name, self.avail_zone, self.ami_id, self.ami_type)
         end
       rescue => e
         puts e.backtrace

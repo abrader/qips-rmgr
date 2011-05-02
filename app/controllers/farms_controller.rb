@@ -13,6 +13,7 @@ class FarmsController < ApplicationController
   def new
     @instance_types = INSTANCE_TYPES_32 + INSTANCE_TYPES_64
     @roles = Role.get_roles
+    @availability_zones = Node.get_avail_zones
     @farm = Farm.new
 
     respond_to do |format|
@@ -24,6 +25,7 @@ class FarmsController < ApplicationController
   def create
     @instance_types = INSTANCE_TYPES_32 + INSTANCE_TYPES_64
     @roles = Role.get_roles
+    @availability_zones = Node.get_avail_zones
     @farm = Farm.new(params[:farm])
 
     begin
@@ -45,6 +47,7 @@ class FarmsController < ApplicationController
     @instance_types
     @farm = Farm.find(params[:id])
     @roles = Role.get_roles
+    @availability_zones = Node.get_avail_zones
     
     arch = Node.get_arch(@farm.ami_id)
     

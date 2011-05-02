@@ -85,7 +85,7 @@ class Node
     return false
   end
   
-  def start_by_spot_request(farm_name, image_id, ami_type, spot_price)
+  def start_by_spot_request(farm_name, avail_zone, image_id, ami_type, spot_price)
     # This is the AWS reduced cost spot request
     require 'net/ssh/multi'
     
@@ -110,7 +110,8 @@ class Node
             :monitoring_enabled => true,
             :launch_group => launch_group,
             :groups => Chef::Config[:knife][:security_groups],
-            :instance_type => ami_type
+            :instance_type => ami_type,
+            :availability_zone => avail_zone
     )
     
     @spot_instance_request_id = sir[0][:spot_instance_request_id]
@@ -156,14 +157,14 @@ class Node
   end
   
   # Resque method called by Farm to instantiate a spot instance request via queue
-  def self.async_start_by_spot_request(farm_name, image_id=Chef::Config[:knife][:image], ami_type=nil, spot_price=Chef::Config[:knife][:spot_price])
-    Resque.enqueue(Node, farm_name, image_id, ami_type, spot_price)
+  def self.async_start_by_spot_request(farm_name, avail_zone, image_id=Chef::Config[:knife][:image], ami_type=nil, spot_price=Chef::Config[:knife][:spot_price])
+    Resque.enqueue(Node, farm_name, avail_zone, image_id, ami_type, spot_price)
   end
   
   # Resque required method for calling start_by_spot_request via queue
-  def self.perform(farm_name, image_id, ami_type, spot_price)
+  def self.perform(farm_name, avail_zone, image_id, ami_type, spot_price)
     n = Node.new
-    n.start_by_spot_request(farm_name, image_id, ami_type, spot_price)
+    n.start_by_spot_request(farm_name, avail_zone, image_id, ami_type, spot_price)
   end
   
   def self.set_chef_url()
@@ -279,6 +280,17 @@ class Node
   # Wrapper for Right AWS describe_spot_instance_requests method
   def self.describe_spot_instance_request(spot_request_id)
     @@ec2.describe_spot_instance_requests(spot_request_id)[0]
+  end
+  
+  def self.get_avail_zones()
+    avail_zones = Array.new
+    azs = @@ec2.describe_availability_zones
+    azs.each do |az|
+      if az[:zone_state] == "available"
+        avail_zones << az[:zone_name]
+      end
+    end
+    avail_zones
   end
   
   # Sets @aws_state, @hostname
