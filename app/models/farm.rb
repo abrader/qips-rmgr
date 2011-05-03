@@ -4,6 +4,10 @@ class Farm < ActiveRecord::Base
   validates_length_of :ami_id, :minimum => 12, :maximum => 12, :message => "AMI_ID has an exact length of 12 characters"
   
   require 'chef/search/query'
+  
+  
+  @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
+  
     
   def self.min_max_check()
     #Cycle through farms, take note of min max, then check state of each farm to insure compliance.
@@ -22,9 +26,21 @@ class Farm < ActiveRecord::Base
   end
   
   def idle()
-    # Returns instance ids of instances that are in an idle state from this farm.
+    # Returns instance ids of instances that are in an idle state associated with this farm.
     instance_ids = Array.new
     query_array = Node.query_chef("node", "qips_status","idle")
+    query_array.each do |instance|
+      if instance["qips_farm"] == self.name
+        instance_ids << instance.ec2.instance_id
+      end
+    end
+    instance_ids
+  end
+  
+  def busy()
+    # Returns instance ids of instances that are in a busy state associated with this farm.
+    instance_ids = Array.new
+    query_array = Node.query_chef("node", "qips_status","busy")
     query_array.each do |instance|
       if instance["qips_farm"] == self.name
         instance_ids << instance.ec2.instance_id
@@ -47,15 +63,15 @@ class Farm < ActiveRecord::Base
         farm.idle.each do |instance_id|
           instance = @@ec2.describe_instances(instance_id)[0]
           uptime_sec = (Time.now.to_i - DateTime.parse(instance[:aws_launch_time]).to_i)
-          if (uptime_sec % (60 * 60)) >= 3120 # 3120 = 52 minutes * 60 secs
-            if self.cpu_util(comp.ec2.instance_id) < 10.0 then
-              Rails.logger.info("Node.reconcile_nodes: Shutting down #{comp.ec2.instance_id} due to inactivity.")
-              #Node.shutdown_instance(comp.ec2.instance_id)
+          if (uptime_sec % 3600) >= 3120 # 3120 = 52 minutes * 60 secs
+            if Node.load(instance[:aws_instance_id]).qips_status == "idle"
+              Rails.logger.info("Farm.reconcile_nodes: Shutting down #{instance[:aws_instance_id]} due to inactivity.")
+              Node.shutdown_instance(instance[:aws_instance_id])
             else
-              Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to activity")
+              Rails.logger.info("Farm.reconcile_nodes: #{instance[:aws_instance_id]} will not be shutdown due to qips-status = busy")
             end
           else
-            Rails.logger.info("Node.reconcile_nodes: #{comp.ec2.instance_id} will not be shutdown due to incompatible interval")
+            Rails.logger.info("Farm.reconcile_nodes: #{instance[:aws_instance_id]} will not be shutdown due to incompatible interval")
           end
         end
       end
