@@ -9,17 +9,35 @@ class Node
   DEFAULT_32_INSTANCE_TYPE = "m1.small"
   DEFAULT_64_INSTANCE_TYPE = "m1.large"
   
-  @@connection = Fog::Compute.new(
-    :provider => 'AWS',
-    :aws_access_key_id => Chef::Config[:knife][:aws_access_key_id],
-    :aws_secret_access_key => Chef::Config[:knife][:aws_secret_access_key]
-  )
-  
   @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
   
   @@acw = RightAws::AcwInterface.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
   
   @queue = :aws_spot_instance_requests
+  
+  def self.set_ec2_west
+    @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-west-1')
+  end
+  
+  def self.set_ec2_east
+    @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-east-1')
+  end
+  
+  def self.switch_ec2_region
+    if Node.get_ec2_region == "east"
+      Node.set_ec2_west
+    else
+      Node.set_ec2_east
+    end
+  end
+  
+  def self.get_ec2_region
+    if @@ec2.params[:server] == "us-west-1.ec2.amazonaws.com"
+      return "west"
+    else
+      return "east"
+    end
+  end
   
   def chef_server_rest
     Chef::REST.new(Chef::Config[:chef_server_url])
@@ -58,22 +76,30 @@ class Node
   end
   
   def self.get_ec2
+    # Need to get EC2 info for both coasts
+    @ec2_info_all = Array.new
+    @ec2_info_all += Node.describe_ec2_instances
+    Node.switch_ec2_region
+    @ec2_info_all += Node.describe_ec2_instances
+  end
+  
+  def self.describe_ec2_instances
     @ec2_info = Array.new
 
-    @@connection.servers.all.each do |instance|
-      if self.instance_match(instance.id.to_s) == false
+    @@ec2.describe_instances.each do |instance|
+      if self.instance_match(instance[:aws_instance_id]) == false
         ec2_instance = Hash.new
-        ec2_instance["private_dns"] = instance.private_dns_name
-        ec2_instance["public_dns"] = instance.dns_name
-        ec2_instance["instance_id"] = instance.id.to_s
-        ec2_instance["ami_id"] = instance.image_id
-        ec2_instance["uptime_seconds"] = (Time.now.to_i - instance.created_at.to_i)
-        ec2_instance["state"] = instance.state
+        ec2_instance["private_dns"] = instance[:private_dns_name]
+        ec2_instance["public_dns"] = instance[:dns_name]
+        ec2_instance["instance_id"] = instance[:aws_instance_id]
+        ec2_instance["ami_id"] = instance[:aws_image_id]
+        ec2_instance["uptime_seconds"] = (Time.now.to_i - instance[:aws_launch_time].to_time.to_i)
+        ec2_instance["state"] = instance[:aws_state]
         @ec2_info << ec2_instance
       end
     end
     @ec2_info
-  end
+  end    
    
   #Check to see if an instance_id already exists in local record
   def self.instance_match(instance_id)
@@ -85,7 +111,7 @@ class Node
     return false
   end
   
-  def start_by_spot_request(farm_name, avail_zone, image_id, ami_type, spot_price)
+  def start_by_spot_request(farm_name, avail_zone, keypair, image_id, ami_type, spot_price)
     # This is the AWS reduced cost spot request
     require 'net/ssh/multi'
     
@@ -102,10 +128,16 @@ class Node
     
     launch_group = ("QIPS_" + Rails.env).to_s
     
+    if avail_zone =~ /west/
+      Node.set_ec2_west
+    elsif avail_zone =~ /east/
+      Node.set_ec2_east
+    end
+    
     sir = @@ec2.request_spot_instances(
             :image_id => image_id,
             :spot_price => spot_price,
-            :key_name => Chef::Config[:knife][:aws_ssh_key_id],
+            :key_name => keypair,
             :instance_count => 1,
             :monitoring_enabled => true,
             :launch_group => launch_group,
@@ -157,14 +189,14 @@ class Node
   end
   
   # Resque method called by Farm to instantiate a spot instance request via queue
-  def self.async_start_by_spot_request(farm_name, avail_zone, image_id=Chef::Config[:knife][:image], ami_type=nil, spot_price=Chef::Config[:knife][:spot_price])
-    Resque.enqueue(Node, farm_name, avail_zone, image_id, ami_type, spot_price)
+  def self.async_start_by_spot_request(farm_name, avail_zone, keypair, image_id=Chef::Config[:knife][:image], ami_type=nil, spot_price=Chef::Config[:knife][:spot_price])
+    Resque.enqueue(Node, farm_name, avail_zone, keypair, image_id, ami_type, spot_price)
   end
   
   # Resque required method for calling start_by_spot_request via queue
-  def self.perform(farm_name, avail_zone, image_id, ami_type, spot_price)
+  def self.perform(farm_name, avail_zone, keypair, image_id, ami_type, spot_price)
     n = Node.new
-    n.start_by_spot_request(farm_name, avail_zone, image_id, ami_type, spot_price)
+    n.start_by_spot_request(farm_name, avail_zone, keypair, image_id, ami_type, spot_price)
   end
   
   def self.set_chef_url()
@@ -267,11 +299,37 @@ class Node
   
   # Removes node and client from Chef as well as uses Right AWS method for shutdown of instance
   def self.shutdown_instance(instance_id)
+    chef_aware = Object.new
+    
     begin
-      @@ec2.terminate_instances(instance_id)
-      node_client_name = Node.id_to_name(instance_id)
-      self.delete_chef_node(node_client_name)
-      self.delete_chef_client(node_client_name)
+      if Node.load(instance_id)
+        chef_aware = true
+      else
+        chef_aware = false
+      end
+    rescue Net::HTTPServerException
+      chef_aware = false
+    end
+        
+    begin
+      if chef_aware
+        @@ec2.terminate_instances(instance_id)
+        node_client_name = Node.id_to_name(instance_id)
+        self.delete_chef_node(node_client_name)
+        self.delete_chef_client(node_client_name)
+      else
+        @@ec2.terminate_instances(instance_id)
+      end
+    rescue RightAws::AwsError
+      Node.switch_ec2_region
+      if chef_aware
+        @@ec2.terminate_instances(instance_id)
+        node_client_name = Node.id_to_name(instance_id)
+        self.delete_chef_node(node_client_name)
+        self.delete_chef_client(node_client_name)
+      else
+        @@ec2.terminate_instances(instance_id)
+      end
     rescue
       Rails.logger.error("Node.shutdown_instance: Unable to shutdown #{instance_id} properly.")
     end
@@ -279,12 +337,26 @@ class Node
   
   # Wrapper for Right AWS describe_spot_instance_requests method
   def self.describe_spot_instance_request(spot_request_id)
-    @@ec2.describe_spot_instance_requests(spot_request_id)[0]
+    begin
+      @@ec2.describe_spot_instance_requests(spot_request_id)[0]
+    rescue RightAws::AwsError
+      Node.switch_ec2_region
+      @@ec2.describe_spot_instance_requests(spot_request_id)[0]
+    rescue
+      Rails.logger.error("Node.describe_spot_instance_request: Unable to get details on spot instance request id #{spot_request_id}.")
+    end
   end
   
   def self.get_avail_zones()
     avail_zones = Array.new
-    azs = @@ec2.describe_availability_zones
+    azs = Array.new
+    
+    azs += @@ec2.describe_availability_zones
+    Node.switch_ec2_region
+    azs += @@ec2.describe_availability_zones
+    # Set region back to what it was originally
+    Node.switch_ec2_region
+    
     azs.each do |az|
       if az[:zone_state] == "available"
         avail_zones << az[:zone_name]
@@ -298,10 +370,18 @@ class Node
     if @instance_id == nil
       return false
     else
-      instance = @@ec2.describe_instances(@instance_id)[0]
-      @aws_state = instance[:aws_state]
-      @hostname = instance[:dns_name]
-      return true
+      begin
+        instance = @@ec2.describe_instances(@instance_id)[0]
+        @aws_state = instance[:aws_state]
+        @hostname = instance[:dns_name]
+        return true
+      rescue RightAws::AwsError
+        Node.switch_ec2_region
+        instance = @@ec2.describe_instances(@instance_id)[0]
+        @aws_state = instance[:aws_state]
+        @hostname = instance[:dns_name]
+        return true
+      end
     end
   end
   
@@ -309,7 +389,10 @@ class Node
   def self.get_arch(ami_id)
     begin
       @@ec2.describe_images(ami_id)[0][:aws_architecture]
-    rescue
+    rescue RightAws::AwsError
+      Node.switch_ec2_region
+      @@ec2.describe_images(ami_id)[0][:aws_architecture]
+    rescue StandardError
       Rails.logger.error("Node.get_arch: Unable to retrieve architecture for #{ami_id}. Most likely invalid AMI ID.")
       return "i386"
     end
@@ -344,11 +427,11 @@ class Node
       bootstrap = Chef::Knife::Bootstrap.new
       bootstrap.name_args = @hostname
       # Comma separated list of roles/recipes to apply, getting role via Farm
-      @role_name = Farm.find_by_name(farm_name).role
-      bootstrap.config[:run_list] = "role[#{@role_name}]"
+      frm = Farm.find_by_name(farm_name)
+      bootstrap.config[:run_list] = "role[#{frm.role}]"
       bootstrap.config[:ssh_user] = Chef::Config[:knife][:ssh_user]
       # The SSH identity file used for authentication
-      bootstrap.config[:identity_file] = Chef::Config[:knife][:ssh_client_key]
+      bootstrap.config[:identity_file] = Chef::Config[:knife][:ssh_client_key_dir] + frm.keypair + ".pem"
       # The Chef node name for your new node
       bootstrap.config[:chef_node_name] = @instance_id
       # This is if you want pre-release Chef client gems to be installed

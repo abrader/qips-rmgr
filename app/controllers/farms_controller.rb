@@ -1,4 +1,6 @@
 class FarmsController < ApplicationController
+  skip_before_filter :authenticate, :only => :reconcile
+  
   respond_to :html, :xml, :json
   
   INSTANCE_TYPES_32 = ['m1.small', 'c1.medium']

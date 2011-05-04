@@ -63,7 +63,7 @@ class Farm < ActiveRecord::Base
         farm.idle.each do |instance_id|
           instance = @@ec2.describe_instances(instance_id)[0]
           uptime_sec = (Time.now.to_i - DateTime.parse(instance[:aws_launch_time]).to_i)
-          if (uptime_sec % 3600) >= 3120 # 3120 = 52 minutes * 60 secs
+          if (uptime_sec % 3600) >= Chef::Config[:max_idle_seconds].to_i # Set in config/rmgr-config.rb
             if Node.load(instance[:aws_instance_id]).qips_status == "idle"
               Rails.logger.info("Farm.reconcile_nodes: Shutting down #{instance[:aws_instance_id]} due to inactivity.")
               Node.shutdown_instance(instance[:aws_instance_id])
@@ -80,11 +80,12 @@ class Farm < ActiveRecord::Base
     end
   end
     
+  # FIXME Currently not working for EC2 West coast instances
   def start_instances(num_instances)
     if num_instances.to_i > 0
       begin
         num_instances.to_i.times do
-          Node.async_start_by_spot_request(self.name, self.avail_zone, self.ami_id, self.ami_type)
+          Node.async_start_by_spot_request(self.name, self.avail_zone, self.keypair, self.ami_id, self.ami_type)
         end
       rescue => e
         puts e.backtrace
