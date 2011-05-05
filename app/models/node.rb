@@ -15,6 +15,33 @@ class Node
   
   @queue = :aws_spot_instance_requests
   
+  def self.find_by_instance_id(instance_id)
+    new_node = allocate
+    new_node.initialize_from_instance_id(instance_id)
+    new_node
+  end
+  
+  def initialize_from_instance_id(instance_id)
+    begin
+      instance = @@ec2.describe_instances(instance_id)[0]
+      @instance_id = instance[:aws_instance_id]
+      @aws_state = instance[:aws_state]
+      @hostname = instance[:dns_name]
+      @spot_instance_request_id  = instance[:spot_instance_request_id]
+      @sir_state = @@ec2.describe_spot_instance_requests(@spot_instance_request_id)[0][:state]
+      return self
+    rescue RightAws::AwsError
+      Node.switch_ec2_region
+      instance = @@ec2.describe_instances(instance_id)[0]
+      @instance_id = instance[:aws_instance_id]
+      @aws_state = instance[:aws_state]
+      @hostname = instance[:dns_name]
+      @spot_instance_request_id  = instance[:spot_instance_request_id]
+      @sir_state = @@ec2.describe_spot_instance_requests(@spot_instance_request_id)[0][:state]
+      return self
+    end
+  end
+      
   def self.set_ec2_west
     @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-west-1')
   end
@@ -446,6 +473,7 @@ class Node
       bootstrap
     rescue
       Rails.logger.error("Node.instance_bootstrap: Unable to boostrap instance #{@instance_id}")
+      return nil
     end
   end
   

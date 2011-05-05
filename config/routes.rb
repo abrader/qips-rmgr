@@ -13,11 +13,11 @@ QipsRmgr::Application.routes.draw do
     end
     
     member do
-      get 'busy', :action => 'busy_status'
+      post 'busy', :action => 'busy_status'
     end
     
     member do
-      get 'idle', :action => 'idle_status'
+      post 'idle', :action => 'idle_status'
     end
   end
   

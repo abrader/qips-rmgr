@@ -8,6 +8,29 @@ class Farm < ActiveRecord::Base
   
   @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
   
+  def self.set_ec2_west
+    @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-west-1')
+  end
+  
+  def self.set_ec2_east
+    @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-east-1')
+  end
+  
+  def self.switch_ec2_region
+    if Node.get_ec2_region == "east"
+      Node.set_ec2_west
+    else
+      Node.set_ec2_east
+    end
+  end
+  
+  def self.get_ec2_region
+    if @@ec2.params[:server] == "us-west-1.ec2.amazonaws.com"
+      return "west"
+    else
+      return "east"
+    end
+  end
     
   def self.min_max_check()
     #Cycle through farms, take note of min max, then check state of each farm to insure compliance.
@@ -61,11 +84,17 @@ class Farm < ActiveRecord::Base
     begin
       Farm.find(:all).each do |farm|
         farm.idle.each do |instance_id|
+          if Node.query_chef("node", "name", instance_id)[0].domain =~ /west/
+            Farm.set_ec2_west
+          else
+            Farm.set_ec2_east
+          end
+          puts @@ec2
           instance = @@ec2.describe_instances(instance_id)[0]
           uptime_sec = (Time.now.to_i - DateTime.parse(instance[:aws_launch_time]).to_i)
           if (uptime_sec % 3600) >= Chef::Config[:max_idle_seconds].to_i # Set in config/rmgr-config.rb
             if Node.load(instance[:aws_instance_id]).qips_status == "idle"
-              Rails.logger.info("Farm.reconcile_nodes: Shutting down #{instance[:aws_instance_id]} due to inactivity.")
+              Rails.logger.info("[#{Time.now}] Farm.reconcile_nodes: Shutting down #{instance[:aws_instance_id]} due to inactivity.")
               Node.shutdown_instance(instance[:aws_instance_id])
             else
               Rails.logger.info("Farm.reconcile_nodes: #{instance[:aws_instance_id]} will not be shutdown due to qips-status = busy")
@@ -74,9 +103,11 @@ class Farm < ActiveRecord::Base
             Rails.logger.info("Farm.reconcile_nodes: #{instance[:aws_instance_id]} will not be shutdown due to incompatible interval")
           end
         end
+        #return true
       end
-    rescue => e
-      Rails.logger.error("Farm.reconcile_nodes: Unable to perform reconcile duties.")
+    rescue
+      Rails.logger.error("[#{Time.now}] Farm.reconcile_nodes: Unable to perform reconcile duties.")
+      #return false
     end
   end
     
