@@ -4,33 +4,7 @@ class Farm < ActiveRecord::Base
   validates_length_of :ami_id, :minimum => 12, :maximum => 12, :message => "AMI_ID has an exact length of 12 characters"
   
   require 'chef/search/query'
-  
-  
-  @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
-  
-  def self.set_ec2_west
-    @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-west-1')
-  end
-  
-  def self.set_ec2_east
-    @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-east-1')
-  end
-  
-  def self.switch_ec2_region
-    if Node.get_ec2_region == "east"
-      Node.set_ec2_west
-    else
-      Node.set_ec2_east
-    end
-  end
-  
-  def self.get_ec2_region
-    if @@ec2.params[:server] == "us-west-1.ec2.amazonaws.com"
-      return "west"
-    else
-      return "east"
-    end
-  end
+  require 'lib/connect'
     
   def self.min_max_check()
     #Cycle through farms, take note of min max, then check state of each farm to insure compliance.
@@ -82,36 +56,39 @@ class Farm < ActiveRecord::Base
     Farm.min_max_check
     #Second we check if CPU is being used after 52 minutes since the instance was launched is up. If so, shutdown instance.
     begin
+      
+      conn = Connect.new
+      
       Farm.find(:all).each do |farm|
         farm.idle.each do |instance_id|
           if Node.query_chef("node", "name", instance_id)[0].domain =~ /west/
-            Farm.set_ec2_west
+            conn.set_west
           else
-            Farm.set_ec2_east
+            conn.set_east
           end
-          puts @@ec2
-          instance = @@ec2.describe_instances(instance_id)[0]
-          uptime_sec = (Time.now.to_i - DateTime.parse(instance[:aws_launch_time]).to_i)
+          instance = conn.fog.servers.get(instance_id)
+          uptime_sec = (Time.now.to_i - DateTime.parse(instance.created_at.to_i))
           if (uptime_sec % 3600) >= Chef::Config[:max_idle_seconds].to_i # Set in config/rmgr-config.rb
-            if Node.load(instance[:aws_instance_id]).qips_status == "idle"
-              Rails.logger.info("[#{Time.now}] Farm.reconcile_nodes: Shutting down #{instance[:aws_instance_id]} due to inactivity.")
-              Node.shutdown_instance(instance[:aws_instance_id])
+            if Node.load(instance.id).qips_status == "idle"
+              Rails.logger.info("[#{Time.now}] Farm.reconcile_nodes: Shutting down #{instance.id} due to inactivity.")
+              #Node.shutdown_instance(instance[:aws_instance_id])
             else
-              Rails.logger.info("Farm.reconcile_nodes: #{instance[:aws_instance_id]} will not be shutdown due to qips-status = busy")
+              Rails.logger.info("Farm.reconcile_nodes: #{instance.id} will not be shutdown due to qips-status = busy")
+              return true
             end
           else
-            Rails.logger.info("Farm.reconcile_nodes: #{instance[:aws_instance_id]} will not be shutdown due to incompatible interval")
+            Rails.logger.info("Farm.reconcile_nodes: #{instance.id} will not be shutdown due to incompatible interval")
+            return true
           end
         end
-        #return true
+        return true
       end
     rescue
       Rails.logger.error("[#{Time.now}] Farm.reconcile_nodes: Unable to perform reconcile duties.")
-      #return false
+      return false
     end
   end
     
-  # FIXME Currently not working for EC2 West coast instances
   def start_instances(num_instances)
     if num_instances.to_i > 0
       begin

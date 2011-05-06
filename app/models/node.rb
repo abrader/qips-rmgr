@@ -1,10 +1,11 @@
 class Node
-  attr_accessor :instance_id, :sir_state, :aws_state, :hostname, :spot_instance_request_id
+  attr_accessor :instance_id, :sir_state, :aws_state, :hostname, :spot_instance_request_id, :region
   
   require 'chef/knife/bootstrap'
   require 'chef/knife/ssh'
   require 'chef/search/query'
   require 'resque'
+  require 'lib/connect'
   
   DEFAULT_32_INSTANCE_TYPE = "m1.small"
   DEFAULT_64_INSTANCE_TYPE = "m1.large"
@@ -22,43 +23,51 @@ class Node
   end
   
   def initialize_from_instance_id(instance_id)
+    conn = Connect.new 
+    
     begin
-      instance = @@ec2.describe_instances(instance_id)[0]
+      instance = conn.right_ec2.describe_instances(instance_id)[0]
+      @region = conn.region
       @instance_id = instance[:aws_instance_id]
       @aws_state = instance[:aws_state]
       @hostname = instance[:dns_name]
       @spot_instance_request_id  = instance[:spot_instance_request_id]
-      @sir_state = @@ec2.describe_spot_instance_requests(@spot_instance_request_id)[0][:state]
+      @sir_state = conn.right_ec2.describe_spot_instance_requests(@spot_instance_request_id)[0][:state]
       return self
     rescue RightAws::AwsError
-      Node.switch_ec2_region
-      instance = @@ec2.describe_instances(instance_id)[0]
+      conn.switch_region
+      instance = conn.right_ec2.describe_instances(instance_id)[0]
+      @region = Node.get_rightaws_region
       @instance_id = instance[:aws_instance_id]
       @aws_state = instance[:aws_state]
       @hostname = instance[:dns_name]
       @spot_instance_request_id  = instance[:spot_instance_request_id]
-      @sir_state = @@ec2.describe_spot_instance_requests(@spot_instance_request_id)[0][:state]
+      @sir_state = conn.right_ec2.describe_spot_instance_requests(@spot_instance_request_id)[0][:state]
       return self
     end
   end
-      
-  def self.set_ec2_west
+     
+  # TODO use connect lib, remove
+  def self.set_rightaws_west
     @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-west-1')
   end
   
-  def self.set_ec2_east
+  # TODO use connect lib, remove
+  def self.set_rightaws_east
     @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-east-1')
   end
   
-  def self.switch_ec2_region
-    if Node.get_ec2_region == "east"
-      Node.set_ec2_west
+  # TODO use connect lib, remove
+  def self.switch_rightaws_region
+    if Node.get_rightaws_region == "east"
+      Node.set_rightaws_west
     else
-      Node.set_ec2_east
+      Node.set_rightaws_east
     end
   end
   
-  def self.get_ec2_region
+  # TODO use connect lib, remove
+  def self.get_rightaws_region
     if @@ec2.params[:server] == "us-west-1.ec2.amazonaws.com"
       return "west"
     else
@@ -92,8 +101,10 @@ class Node
   end
   
   def self.cpu_util(instance_id)
+    conn = Connect.new
+    conn.bind_instance_region(instance_id) # This is will set the EC2 region appriopriately for the ACW command
     util_over_time = 10 # min
-    stats = @@acw.get_metric_statistics(:start_time => (Time.now.utc - (util_over_time * 60)), :period => 60, :namespace => "AWS/EC2", :dimentions => {:InstanceId => instance_id}, :measure_name=>"CPUUtilization")
+    stats = conn.right_acw.get_metric_statistics(:start_time => (Time.now.utc - (util_over_time * 60)), :period => 60, :namespace => "AWS/EC2", :dimentions => {:InstanceId => instance_id}, :measure_name=>"CPUUtilization")
     avg = 0.0
     stats[:datapoints].each do |stat|
       avg = avg + stat[:average]
@@ -105,15 +116,23 @@ class Node
   def self.get_ec2
     # Need to get EC2 info for both coasts
     @ec2_info_all = Array.new
-    @ec2_info_all += Node.describe_ec2_instances
-    Node.switch_ec2_region
-    @ec2_info_all += Node.describe_ec2_instances
+    @ec2_info_all += Node.describe_ec2_instances("west")
+    Node.switch_rightaws_region
+    @ec2_info_all += Node.describe_ec2_instances("east")
   end
   
-  def self.describe_ec2_instances
-    @ec2_info = Array.new
 
-    @@ec2.describe_instances.each do |instance|
+  def self.describe_ec2_instances(region)
+    @ec2_info = Array.new
+    
+    conn = Connect.new
+    if region == "west"
+      conn.set_east
+    else
+      conn.set_west
+    end
+
+    conn.right_ec2.describe_instances.each do |instance|
       if self.instance_match(instance[:aws_instance_id]) == false
         ec2_instance = Hash.new
         ec2_instance["private_dns"] = instance[:private_dns_name]
@@ -144,6 +163,9 @@ class Node
     
     instance = nil
     
+    conn = Connect.new
+    conn.bind_image_region(image_id)
+    
     if ami_type == nil
       arch = Node.get_arch(image_id)
       if arch == "i386"
@@ -155,13 +177,7 @@ class Node
     
     launch_group = ("QIPS_" + Rails.env).to_s
     
-    if avail_zone =~ /west/
-      Node.set_ec2_west
-    elsif avail_zone =~ /east/
-      Node.set_ec2_east
-    end
-    
-    sir = @@ec2.request_spot_instances(
+    sir = conn.right_ec2.request_spot_instances(
             :image_id => image_id,
             :spot_price => spot_price,
             :key_name => keypair,
@@ -188,7 +204,7 @@ class Node
     self.get_instance_status
     
     # Once we're done with the spot instance request we can cancel it
-    @@ec2.cancel_spot_instance_requests(@spot_instance_request_id)
+    conn.right_ec2.cancel_spot_instance_requests(@spot_instance_request_id)
     
     # Must wait for aws_state to go from Pending to Active in order to get pertinent host information i.e., hostname
     while @aws_state =~ /pending/
@@ -327,6 +343,8 @@ class Node
   # Removes node and client from Chef as well as uses Right AWS method for shutdown of instance
   def self.shutdown_instance(instance_id)
     chef_aware = Object.new
+    conn = Connect.new
+    conn.bind_instance_region(instance_id)
     
     begin
       if Node.load(instance_id)
@@ -340,22 +358,12 @@ class Node
         
     begin
       if chef_aware
-        @@ec2.terminate_instances(instance_id)
+        conn.right_ec2.terminate_instances(instance_id)
         node_client_name = Node.id_to_name(instance_id)
         self.delete_chef_node(node_client_name)
         self.delete_chef_client(node_client_name)
       else
-        @@ec2.terminate_instances(instance_id)
-      end
-    rescue RightAws::AwsError
-      Node.switch_ec2_region
-      if chef_aware
-        @@ec2.terminate_instances(instance_id)
-        node_client_name = Node.id_to_name(instance_id)
-        self.delete_chef_node(node_client_name)
-        self.delete_chef_client(node_client_name)
-      else
-        @@ec2.terminate_instances(instance_id)
+        conn.right_ec2.terminate_instances(instance_id)
       end
     rescue
       Rails.logger.error("Node.shutdown_instance: Unable to shutdown #{instance_id} properly.")
@@ -363,26 +371,26 @@ class Node
   end
   
   # Wrapper for Right AWS describe_spot_instance_requests method
-  def self.describe_spot_instance_request(spot_request_id)
+  def self.describe_spot_instance_request(spot_instance_request_id)
     begin
-      @@ec2.describe_spot_instance_requests(spot_request_id)[0]
-    rescue RightAws::AwsError
-      Node.switch_ec2_region
-      @@ec2.describe_spot_instance_requests(spot_request_id)[0]
-    rescue
-      Rails.logger.error("Node.describe_spot_instance_request: Unable to get details on spot instance request id #{spot_request_id}.")
+      conn = Connect.new
+      conn.bind_spot_instance_region(spot_instance_request_id)
+      conn.right_ec2.describe_spot_instance_requests(spot_instance_request_id)[0]
+    rescue => e
+      puts e.backtrace
+      Rails.logger.error("Node.describe_spot_instance_request: Unable to get details on spot instance request id #{spot_instance_request_id}.")
+      return nil
     end
   end
   
   def self.get_avail_zones()
+    conn = Connect.new
     avail_zones = Array.new
     azs = Array.new
     
-    azs += @@ec2.describe_availability_zones
-    Node.switch_ec2_region
-    azs += @@ec2.describe_availability_zones
-    # Set region back to what it was originally
-    Node.switch_ec2_region
+    azs += conn.right_ec2.describe_availability_zones
+    conn.switch_region
+    azs += conn.right_ec2.describe_availability_zones
     
     azs.each do |az|
       if az[:zone_state] == "available"
@@ -394,17 +402,20 @@ class Node
   
   # Sets @aws_state, @hostname
   def get_instance_status()
+    conn = Connect.new
     if @instance_id == nil
       return false
     else
       begin
-        instance = @@ec2.describe_instances(@instance_id)[0]
+        instance = conn.right_ec2.describe_instances(@instance_id)[0]
+        @region = conn.region
         @aws_state = instance[:aws_state]
         @hostname = instance[:dns_name]
         return true
       rescue RightAws::AwsError
-        Node.switch_ec2_region
-        instance = @@ec2.describe_instances(@instance_id)[0]
+        conn.switch_region
+        instance = conn.right_ec2.describe_instances(@instance_id)[0]
+        @region = conn.region
         @aws_state = instance[:aws_state]
         @hostname = instance[:dns_name]
         return true
@@ -415,11 +426,10 @@ class Node
   # Returns i386 or x86_64, require Amazon Image ID
   def self.get_arch(ami_id)
     begin
-      @@ec2.describe_images(ami_id)[0][:aws_architecture]
-    rescue RightAws::AwsError
-      Node.switch_ec2_region
-      @@ec2.describe_images(ami_id)[0][:aws_architecture]
-    rescue StandardError
+      conn = Connect.new
+      conn.bind_image_region(ami_id)
+      conn.right_ec2.describe_images(ami_id)[0][:aws_architecture]
+    rescue
       Rails.logger.error("Node.get_arch: Unable to retrieve architecture for #{ami_id}. Most likely invalid AMI ID.")
       return "i386"
     end
