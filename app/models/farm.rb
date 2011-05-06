@@ -61,11 +61,7 @@ class Farm < ActiveRecord::Base
       
       Farm.find(:all).each do |farm|
         farm.idle.each do |instance_id|
-          if Node.query_chef("node", "name", instance_id)[0].domain =~ /west/
-            conn.set_west
-          else
-            conn.set_east
-          end
+          conn.bind_instance_region(instance_id)
           instance = conn.fog.servers.get(instance_id)
           uptime_sec = (Time.now.to_i - DateTime.parse(instance.created_at.to_i))
           if (uptime_sec % 3600) >= Chef::Config[:max_idle_seconds].to_i # Set in config/rmgr-config.rb

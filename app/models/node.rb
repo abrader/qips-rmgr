@@ -10,10 +10,6 @@ class Node
   DEFAULT_32_INSTANCE_TYPE = "m1.small"
   DEFAULT_64_INSTANCE_TYPE = "m1.large"
   
-  @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
-  
-  @@acw = RightAws::AcwInterface.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key])
-  
   @queue = :aws_spot_instance_requests
   
   def self.find_by_instance_id(instance_id)
@@ -37,7 +33,7 @@ class Node
     rescue RightAws::AwsError
       conn.switch_region
       instance = conn.right_ec2.describe_instances(instance_id)[0]
-      @region = Node.get_rightaws_region
+      @region = conn.region
       @instance_id = instance[:aws_instance_id]
       @aws_state = instance[:aws_state]
       @hostname = instance[:dns_name]
@@ -47,34 +43,6 @@ class Node
     end
   end
      
-  # TODO use connect lib, remove
-  def self.set_rightaws_west
-    @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-west-1')
-  end
-  
-  # TODO use connect lib, remove
-  def self.set_rightaws_east
-    @@ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-east-1')
-  end
-  
-  # TODO use connect lib, remove
-  def self.switch_rightaws_region
-    if Node.get_rightaws_region == "east"
-      Node.set_rightaws_west
-    else
-      Node.set_rightaws_east
-    end
-  end
-  
-  # TODO use connect lib, remove
-  def self.get_rightaws_region
-    if @@ec2.params[:server] == "us-west-1.ec2.amazonaws.com"
-      return "west"
-    else
-      return "east"
-    end
-  end
-  
   def chef_server_rest
     Chef::REST.new(Chef::Config[:chef_server_url])
   end
@@ -117,7 +85,6 @@ class Node
     # Need to get EC2 info for both coasts
     @ec2_info_all = Array.new
     @ec2_info_all += Node.describe_ec2_instances("west")
-    Node.switch_rightaws_region
     @ec2_info_all += Node.describe_ec2_instances("east")
   end
   
@@ -127,9 +94,9 @@ class Node
     
     conn = Connect.new
     if region == "west"
-      conn.set_east
-    else
       conn.set_west
+    else
+      conn.set_east
     end
 
     conn.right_ec2.describe_instances.each do |instance|
