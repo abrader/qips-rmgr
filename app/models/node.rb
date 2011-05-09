@@ -5,7 +5,7 @@ class Node
   require 'chef/knife/ssh'
   require 'chef/search/query'
   require 'resque'
-  require 'lib/connect'
+  require 'connect'
   
   DEFAULT_32_INSTANCE_TYPE = "m1.small"
   DEFAULT_64_INSTANCE_TYPE = "m1.large"

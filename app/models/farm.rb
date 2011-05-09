@@ -4,7 +4,7 @@ class Farm < ActiveRecord::Base
   validates_length_of :ami_id, :minimum => 12, :maximum => 12, :message => "AMI_ID has an exact length of 12 characters"
   
   require 'chef/search/query'
-  require 'lib/connect'
+  require 'connect'
     
   def self.min_max_check()
     #Cycle through farms, take note of min max, then check state of each farm to insure compliance.
