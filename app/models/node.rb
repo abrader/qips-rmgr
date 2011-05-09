@@ -256,6 +256,14 @@ class Node
     end
   end
   
+  def self.get_qips_status(instance_id)
+    begin
+      Node.query_chef("node", "name", instance_id)[0].qips_status
+    rescue
+      Rails.logger.error("Node.get_qips_status: Unable to retrieve QIPS Status from Chef server for #{instance_id}.")
+    end
+  end
+  
   def self.id_to_name(instance_id)
     begin
       q = Chef::Search::Query.new
