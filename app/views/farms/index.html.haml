@@ -1,3 +1,9 @@
+%table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
+  %tr
+    %td= link_to_unless_current "Nodes", nodes_path
+    %td= link_to_unless_current "Farms", farms_path
+    %td= link_to_unless_current "Roles", roles_path
+%br/
 %h1 Farms
 %table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
   %tr{:bgcolor => "#FF9900"}
@@ -5,8 +11,8 @@
     %th Description
     %th AMI ID
     %th Role
-    %th Min
-    %th Max
+    %th Min / Max
+    %th Running
     %th EC2 Type
     %th Keypair
     %th Availability Zone
@@ -17,8 +23,8 @@
       %td= h farm.description
       %td= h farm.ami_id
       %td= h farm.role
-      %td= h farm.min
-      %td= h farm.max
+      %td= h farm.min.to_s +  "/" +  farm.max.to_s
+      %td= h farm.running_instances.length
       %td= h farm.ami_type
       %td= h farm.keypair
       %td= h farm.avail_zone

@@ -16,6 +16,7 @@ class NodesController < ApplicationController
     begin
       Node.set_qips_status(params[:id], "idle")
       respond_to do |format|
+        format.html { redirect_to nodes_url}
         format.xml  { head :ok }
         format.json  { head :ok }
       end
@@ -28,6 +29,7 @@ class NodesController < ApplicationController
     begin
       Node.set_qips_status(params[:id], "busy")
       respond_to do |format|
+        format.html { redirect_to nodes_url}
         format.xml  { head :ok }
         format.json  { head :ok }
       end
