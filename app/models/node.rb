@@ -88,7 +88,6 @@ class Node
     @ec2_info_all += Node.describe_ec2_instances("east")
   end
   
-
   def self.describe_ec2_instances(region)
     @ec2_info = Array.new
     
@@ -99,15 +98,15 @@ class Node
       conn.set_east
     end
 
-    conn.right_ec2.describe_instances.each do |instance|
-      if self.instance_match(instance[:aws_instance_id]) == false
+    conn.fog.servers.each do |instance|
+      if self.instance_match(instance.id) == false
         ec2_instance = Hash.new
-        ec2_instance["private_dns"] = instance[:private_dns_name]
-        ec2_instance["public_dns"] = instance[:dns_name]
-        ec2_instance["instance_id"] = instance[:aws_instance_id]
-        ec2_instance["ami_id"] = instance[:aws_image_id]
-        ec2_instance["uptime_seconds"] = (Time.now.to_i - instance[:aws_launch_time].to_time.to_i)
-        ec2_instance["state"] = instance[:aws_state]
+        ec2_instance["private_dns"] = instance.private_dns_name
+        ec2_instance["public_dns"] = instance.dns_name
+        ec2_instance["instance_id"] = instance.id
+        ec2_instance["ami_id"] = instance.image_id
+        ec2_instance["uptime"] = instance.created_at
+        ec2_instance["state"] = instance.state
         @ec2_info << ec2_instance
       end
     end

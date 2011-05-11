@@ -47,8 +47,24 @@ class Farm < ActiveRecord::Base
   end
     
   def running_instances()
-    # Returns instance ids associated with instances running from this farm.
-    Node.query_chef("node", "qips_farm", self.name)
+    # Returns running instance information based on Farm, this was the only way to get proper created_at time
+    conn = Connect.new
+    node_array = Array.new
+    Node.query_chef("node", "qips_farm", self.name).each do |nd|
+      n = Hash.new
+      n["chef_url"] = nd.chef_url
+      n["reservation_id"] = nd.ec2.reservation_id
+      conn.bind_instance_region(nd.ec2.instance_id)
+      fog_info = conn.fog.servers.get(nd.ec2.instance_id)
+      n["public_hostname"] = fog_info.dns_name
+      n["instance_id"] = fog_info.id
+      n["name"] = fog_info.id
+      n["ami_id"] = fog_info.image_id
+      n["security_groups"] = fog_info.groups
+      n["created_at"] = fog_info.created_at
+      node_array << n
+    end
+    node_array
   end
   
   def self.reconcile_nodes()
@@ -63,21 +79,21 @@ class Farm < ActiveRecord::Base
         farm.idle.each do |instance_id|
           conn.bind_instance_region(instance_id)
           instance = conn.fog.servers.get(instance_id)
-          uptime_sec = (Time.now.to_i - DateTime.parse(instance.created_at.to_i))
+          uptime_sec = (Time.now.to_i - instance.created_at.to_i)
           if (uptime_sec % 3600) >= Chef::Config[:max_idle_seconds].to_i # Set in config/rmgr-config.rb
             if Node.load(instance.id).qips_status == "idle"
               Rails.logger.info("[#{Time.now}] Farm.reconcile_nodes: Shutting down #{instance.id} due to inactivity.")
-              #Node.shutdown_instance(instance[:aws_instance_id])
+              Node.shutdown_instance(instance_id)
+              return true
             else
-              Rails.logger.info("Farm.reconcile_nodes: #{instance.id} will not be shutdown due to qips-status = busy")
+              Rails.logger.info("[#{Time.now}] Farm.reconcile_nodes: #{instance.id} will not be shutdown due to qips-status = busy")
               return true
             end
           else
-            Rails.logger.info("Farm.reconcile_nodes: #{instance.id} will not be shutdown due to incompatible interval")
+            Rails.logger.info("[#{Time.now}] Farm.reconcile_nodes: #{instance.id} will not be shutdown due to incompatible interval")
             return true
           end
         end
-        return true
       end
     rescue
       Rails.logger.error("[#{Time.now}] Farm.reconcile_nodes: Unable to perform reconcile duties.")
