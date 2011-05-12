@@ -18,6 +18,7 @@ class Node
     new_node
   end
   
+  # Has to use RightAWS for now since Fog doesn't support Spot Instance Requests
   def initialize_from_instance_id(instance_id)
     conn = Connect.new 
     
@@ -70,7 +71,7 @@ class Node
   
   def self.cpu_util(instance_id)
     conn = Connect.new
-    conn.bind_instance_region(instance_id) # This is will set the EC2 region appriopriately for the ACW command
+    conn.set_region(Node.find_by_instance_id(instance_id).region) # This is will set the EC2 region appriopriately for the ACW command
     util_over_time = 10 # min
     stats = conn.right_acw.get_metric_statistics(:start_time => (Time.now.utc - (util_over_time * 60)), :period => 60, :namespace => "AWS/EC2", :dimentions => {:InstanceId => instance_id}, :measure_name=>"CPUUtilization")
     avg = 0.0
@@ -92,11 +93,7 @@ class Node
     @ec2_info = Array.new
     
     conn = Connect.new
-    if region == "west"
-      conn.set_west
-    else
-      conn.set_east
-    end
+    conn.set_region(region)
 
     conn.fog.servers.each do |instance|
       if self.instance_match(instance.id) == false
@@ -318,7 +315,8 @@ class Node
   def self.shutdown_instance(instance_id)
     chef_aware = Object.new
     conn = Connect.new
-    conn.bind_instance_region(instance_id)
+    
+    conn.set_region(Node.find_by_instance_id(instance_id).region)
     
     begin
       if Node.load(instance_id)
@@ -332,19 +330,19 @@ class Node
         
     begin
       if chef_aware
-        conn.right_ec2.terminate_instances(instance_id)
+        instance = conn.fog.servers.get(instance_id).destroy
         node_client_name = Node.id_to_name(instance_id)
         self.delete_chef_node(node_client_name)
         self.delete_chef_client(node_client_name)
       else
-        conn.right_ec2.terminate_instances(instance_id)
+        instance = conn.fog.servers.get(instance_id).destroy
       end
     rescue
       Rails.logger.error("Node.shutdown_instance: Unable to shutdown #{instance_id} properly.")
     end
   end
   
-  # Wrapper for Right AWS describe_spot_instance_requests method
+  # Wrapper for Right AWS describe_spot_instance_requests method, Fog not capable currently.
   def self.describe_spot_instance_request(spot_instance_request_id)
     begin
       conn = Connect.new

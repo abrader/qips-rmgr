@@ -7,7 +7,7 @@
 %h1 Nodes
 %br/
 - @farms.each do |f|
-  - if f.running_instances.size > 0
+  - if  ! f.running_instances.nil? && ! f.running_instances.empty?
     %h3= h f.name
     %table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
       %tr{:bgcolor => "#669900"}
@@ -25,7 +25,7 @@
           %th &nbsp;
           %th.last &nbsp; 
       - f.running_instances.each do |node|
-        - if node != nil
+        - if ! node.nil?
           %tr.data_row
             %td= link_to node["name"], url_for(node["chef_url"])
             %td= h node["public_hostname"]
@@ -37,7 +37,7 @@
             %td= h distance_of_time_in_words(node["created_at"], Time.now, false).capitalize
             %td= h Node.cpu_util(node["instance_id"])
             - if f.name != "Chef Server"
-              - if node != nil && Node.get_qips_status(node["instance_id"]) == "busy"
+              - if ! node.nil? && Node.get_qips_status(node["instance_id"]) == "busy"
                 %td= button_to "Set Idle", idle_node_path(:id => node["instance_id"]), :confirm => "Are you sure you want to set #{node["instance_id"]} to idle?"
               - else
                 %td= button_to "Set Busy", busy_node_path(:id => node["instance_id"]), :confirm => "Are you sure you want to set #{node["instance_id"]} to busy?"

@@ -48,13 +48,16 @@ class Farm < ActiveRecord::Base
     
   def running_instances()
     # Returns running instance information based on Farm, this was the only way to get proper created_at time
-    conn = Connect.new
     node_array = Array.new
     Node.query_chef("node", "qips_farm", self.name).each do |nd|
+      if nd.nil?
+        return nil
+      end
+      conn = Connect.new
       n = Hash.new
       n["chef_url"] = nd.chef_url
       n["reservation_id"] = nd.ec2.reservation_id
-      conn.bind_instance_region(nd.ec2.instance_id)
+      conn.set_region(Node.find_by_instance_id(nd.ec2.instance_id).region)
       fog_info = conn.fog.servers.get(nd.ec2.instance_id)
       n["public_hostname"] = fog_info.dns_name
       n["instance_id"] = fog_info.id
@@ -77,7 +80,7 @@ class Farm < ActiveRecord::Base
       
       Farm.find(:all).each do |farm|
         farm.idle.each do |instance_id|
-          conn.bind_instance_region(instance_id)
+          conn.set_region(Node.find_by_instance_id(instance_id).region)
           instance = conn.fog.servers.get(instance_id)
           uptime_sec = (Time.now.to_i - instance.created_at.to_i)
           if (uptime_sec % 3600) >= Chef::Config[:max_idle_seconds].to_i # Set in config/rmgr-config.rb
