@@ -185,7 +185,22 @@ class Node
     sleep(45)
 
     # Time to get that instance boostrapped with Chef-client
-    self.instance_bootstrap(farm_name).run
+    tries = 0
+    
+    begin
+      tries +=1
+      self.instance_bootstrap(farm_name).run
+    rescue
+      Rails.logger.warn("Node.start_by_spot_request: First attempt to bootstrap instance #{@instance_id} failed. Retyring...")
+      tries +=1
+      retry if tries <= 2
+      Rails.logger.error("Node.start_by_spot_request: Unable to bootstrap instance #{@instance_id}.")
+      Node.shutdown_instance(@instance_id)
+      fm = Farm.find_by_name(farm_name)
+      fm.start_instances(1)
+    end
+      
+      
     
     # Set attributes so we can retrieve from OHAI later.
     sleep(15)
