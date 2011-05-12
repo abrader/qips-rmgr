@@ -32,17 +32,6 @@ class Connect
     end
   end
   
-  def bind_instance_region(instance_id)
-    begin
-      self.right_ec2.describe_instances(instance_id)
-      return self.region
-    rescue RightAws::AwsError
-      self.switch_region
-      self.right_ec2.describe_instances(instance_id)
-      return self.region
-    end
-  end
-  
   def bind_spot_instance_region(spot_instance_request_id)
     begin
       self.right_ec2.describe_spot_instance_requests(spot_instance_request_id)
@@ -67,51 +56,40 @@ class Connect
   
   def switch_region
     if self.region == "east"
-      self.set_west
+      self.set_region("west")
     elsif self.region == "west"
-      self.set_east
+      self.set_region("east")
     else
       Rails.logger.error("Connect.switch_region: Connect object doesn't have region set.")
     end
   end
   
-  def set_west
+  # Will accept "east" or "west"
+  def set_region(rgn) 
     begin
+      location = String.new
+      
+      if rgn == "west"
+        location =  "us-west-1"
+      else
+        location = "us-east-1"
+      end
+      
       @fog = Fog::Compute.new(
         :provider => 'AWS',
-        :region => 'us-west-1',
+        :region => location,
         :aws_access_key_id => Chef::Config[:knife][:aws_access_key_id],
         :aws_secret_access_key => Chef::Config[:knife][:aws_secret_access_key]
       )
-    
-      @right_ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-west-1')
 
-      @right_acw = RightAws::AcwInterface.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-west-1')
+      @right_ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => location)
 
-      @region = "west"
+      @right_acw = RightAws::AcwInterface.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => location)
+
+      @region = rgn
       return true
     rescue
       return false
     end
-  end
-  
-  def set_east
-    begin
-      @fog = Fog::Compute.new(
-        :provider => 'AWS',
-        :region => 'us-east-1',
-        :aws_access_key_id => Chef::Config[:knife][:aws_access_key_id],
-        :aws_secret_access_key => Chef::Config[:knife][:aws_secret_access_key]
-      )
-    
-      @right_ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-east-1')
-
-      @right_acw = RightAws::AcwInterface.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => 'us-east-1')
-      
-      @region = "east"
-      return true
-    rescue
-      return false
-    end  
-  end
+  end    
 end

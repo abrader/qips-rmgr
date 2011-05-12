@@ -5,11 +5,12 @@ class NodesController < ApplicationController
   
   def index
     begin
+      @farms = Farm.all
       @ec2_instances = Node.get_ec2
     rescue => e
       Rails.logger.error("NodesController.index: Unable to display list of nodes.")
     end
-    respond_with(@ec2_instances)
+    respond_with(@farms, @ec2_instances)
   end
   
   def idle_status
@@ -43,12 +44,12 @@ class NodesController < ApplicationController
       if params[:id] then
         @instance_id = params[:id]
         Node.shutdown_instance(@instance_id)
-        redirect_to nodes_url, :notice => "#{@instance_id} was shutdown successfully."
+        redirect_to nodes_path, :notice => "#{@instance_id} was shutdown successfully."
       end
     rescue => e
       puts e.backtrace
       Rails.logger.error("NodesController.destroy: Could not delete chef client and shutdown instance associated with #{params[:id]}")
-      render :index
+      redirect_to nodes_path
     end
   end
 end
