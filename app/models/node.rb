@@ -113,8 +113,13 @@ class Node
   #Check to see if an instance_id already exists in local record
   def self.instance_match(instance_id)
     Node.list().each do |node_name, sys_url|
-      if instance_id == Node.load(node_name).ec2.instance_id
-        return true
+      chef_node = Node.load(node_name)
+      begin
+        if instance_id == chef_node.ec2.instance_id && ! chef_node.qips_status.nil? && ! chef_node.qips_farm.nil?
+          return true
+        end
+      rescue ArgumentError
+        return false
       end
     end
     return false
@@ -191,7 +196,7 @@ class Node
       tries +=1
       self.instance_bootstrap(farm_name).run
     rescue
-      Rails.logger.warn("Node.start_by_spot_request: First attempt to bootstrap instance #{@instance_id} failed. Retyring...")
+      Rails.logger.warn("Node.start_by_spot_request: First attempt to bootstrap instance #{@instance_id} failed. Retrying...")
       tries +=1
       retry if tries <= 2
       Rails.logger.error("Node.start_by_spot_request: Unable to bootstrap instance #{@instance_id}.")
