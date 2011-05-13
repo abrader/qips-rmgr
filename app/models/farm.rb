@@ -15,7 +15,7 @@ class Farm < ActiveRecord::Base
       elsif (num_running_instances > fm.max)
         (num_running_instances - fm.max).times do
           if fm.idle.count > 0
-            Node.shutdown_instance(fm.idle.shift)
+            Node.shutdown_instance(fm.idle.shift, fm.name)
           end
         end
       end
@@ -53,21 +53,42 @@ class Farm < ActiveRecord::Base
       if nd.nil?
         return nil
       end
-      conn = Connect.new
       n = Hash.new
       n["chef_url"] = nd.chef_url
       n["reservation_id"] = nd.ec2.reservation_id
-      conn.set_region(Node.find_by_instance_id(nd.ec2.instance_id).region)
-      fog_info = conn.fog.servers.get(nd.ec2.instance_id)
-      n["public_hostname"] = fog_info.dns_name
-      n["instance_id"] = fog_info.id
-      n["name"] = fog_info.id
-      n["ami_id"] = fog_info.image_id
-      n["security_groups"] = fog_info.groups
-      n["created_at"] = fog_info.created_at
+      n["instance_id"] = nd.ec2.instance_id
+      n["public_hostname"] = nd.ec2.public_hostname
+      n["name"] = nd.name
+      n["ami_id"] = nd.ec2.ami_id
+      n["security_groups"] = nd.ec2.security_groups
+      n["created_at"] = nd.qips_launch_time.to_time
       node_array << n
     end
     node_array
+  end
+  
+  def self.fetch_all()
+    begin
+      nodes = Node.list
+      
+      payload = Hash.new
+      
+      Farm.all.each do |fm|
+        current_farm = Array.new
+        nodes.each do |node_name, sys_url|
+          nd = Node.load(node_name)
+          if fm.name == nd.qips_farm
+            current_farm << nd
+          end
+        end
+        payload[fm.name] = current_farm
+      end
+      
+      return payload
+    rescue
+      Rails.logger.error("Farm.fetch_all: Unable to fetch information on all farms and their respective instances")
+      return nil
+    end
   end
   
   def self.reconcile_nodes()
@@ -80,13 +101,13 @@ class Farm < ActiveRecord::Base
       
       Farm.find(:all).each do |farm|
         farm.idle.each do |instance_id|
-          conn.set_region(Node.find_by_instance_id(instance_id).region)
+          conn.set_region(farm.avail_zone)
           instance = conn.fog.servers.get(instance_id)
           uptime_sec = (Time.now.to_i - instance.created_at.to_i)
           if (uptime_sec % 3600) >= Chef::Config[:max_idle_seconds].to_i # Set in config/rmgr-config.rb
             if Node.load(instance.id).qips_status == "idle"
               Rails.logger.info("[#{Time.now}] Farm.reconcile_nodes: Shutting down #{instance.id} due to inactivity.")
-              Node.shutdown_instance(instance_id)
+              Node.shutdown_instance(instance_id, farm.name)
               return true
             else
               Rails.logger.info("[#{Time.now}] Farm.reconcile_nodes: #{instance.id} will not be shutdown due to qips-status = busy")

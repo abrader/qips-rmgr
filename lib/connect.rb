@@ -30,29 +30,7 @@ class Connect
     rescue
       return false
     end
-  end
-  
-  def bind_spot_instance_region(spot_instance_request_id)
-    begin
-      self.right_ec2.describe_spot_instance_requests(spot_instance_request_id)
-      return self.region
-    rescue RightAws::AwsError
-      self.switch_region
-      self.right_ec2.describe_spot_instance_requests(spot_instance_request_id)
-      return self.region
-    end
-  end
-  
-  def bind_image_region(ami_id)
-    begin
-      self.right_ec2.describe_images(ami_id)
-      return self.region
-    rescue RightAws::AwsError
-      self.switch_region
-      self.right_ec2.describe_images(ami_id)
-      return self.region
-    end
-  end    
+  end 
   
   def switch_region
     if self.region == "east"
@@ -69,7 +47,7 @@ class Connect
     begin
       location = String.new
       
-      if rgn == "west"
+      if rgn =~ /west/
         location =  "us-west-1"
       else
         location = "us-east-1"

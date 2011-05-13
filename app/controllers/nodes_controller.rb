@@ -5,7 +5,7 @@ class NodesController < ApplicationController
   
   def index
     begin
-      @farms = Farm.all
+      @farms = Farm.fetch_all
       @ec2_instances = Node.get_ec2
     rescue => e
       Rails.logger.error("NodesController.index: Unable to display list of nodes.")
@@ -43,7 +43,7 @@ class NodesController < ApplicationController
     begin
       if params[:id] then
         @instance_id = params[:id]
-        Node.shutdown_instance(@instance_id)
+        Node.shutdown_instance(@instance_id, Node.get_farm_name(@instance_id))
         redirect_to nodes_path, :notice => "#{@instance_id} was shutdown successfully."
       end
     rescue => e
