@@ -17,17 +17,21 @@
     %th Keypair
     %th Availability Zone
     %th.last &nbsp;
-  - @farms.each do |farm|
-    %tr.data_row
-      %td= link_to farm.name, edit_farm_path(farm.id)
-      %td= h farm.description
-      %td= h farm.ami_id
-      %td= h farm.role
-      %td= h farm.min.to_s +  "/" +  farm.max.to_s
-      %td= h farm.running_instances.length
-      %td= h farm.ami_type
-      %td= h farm.keypair
-      %td= h farm.avail_zone
-      %td= link_to 'Destroy', farm_path(farm), :method => 'delete', :confirm => "Are you sure you want to delete the farm titled #{farm.name}?"
+  - if ! @farms.nil? && ! @farms.empty?
+    - @farms.each do |farm|
+      %tr.data_row
+        %td= link_to farm.name, edit_farm_path(farm.id)
+        %td= h farm.description
+        %td= h farm.ami_id
+        %td= h farm.role
+        %td= h farm.min.to_s +  "/" +  farm.max.to_s
+        - if farm.running_instances.nil?
+          %td N/A
+        - else
+          %td= h farm.running_instances.length
+        %td= h farm.ami_type
+        %td= h farm.keypair
+        %td= h farm.avail_zone
+        %td= link_to 'Destroy', farm_path(farm), :method => 'delete', :confirm => "Are you sure you want to delete the farm titled #{farm.name}?"
 %br/
 = link_to 'Create a new farm', new_farm_path

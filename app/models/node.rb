@@ -53,7 +53,12 @@ class Node
   end
   
   def self.load(name)
-    chef_server_rest.get_rest("nodes/#{name}")
+    begin
+      chef_server_rest.get_rest("nodes/#{name}")
+    rescue
+      Rails.logger.debug("Node.load: Unable to find Chef info for #{name}")
+      return nil
+    end
   end
   
   # Get the list of all systems registered with Chef.
@@ -267,7 +272,8 @@ class Node
     begin
       Node.query_chef("node", "name", instance_id)[0].qips_farm
     rescue
-      Rails.logger.error("Node.get_qips_status: Unable to retrieve QIPS Status from Chef server for #{instance_id}.")
+      Rails.logger.error("Node.get_farm_name: Unable to retrieve QIPS Status from Chef server for #{instance_id}.")
+      return nil
     end
   end
   

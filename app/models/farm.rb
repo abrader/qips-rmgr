@@ -50,7 +50,7 @@ class Farm < ActiveRecord::Base
     # Returns running instance information based on Farm, this was the only way to get proper created_at time
     node_array = Array.new
     Node.query_chef("node", "qips_farm", self.name).each do |nd|
-      if nd.nil?
+      if nd.nil? || nd.empty?
         return nil
       end
       n = Hash.new
