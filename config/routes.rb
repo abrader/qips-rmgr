@@ -21,7 +21,7 @@ QipsRmgr::Application.routes.draw do
     end
   end
   
-  match "farms/start/:name/:num_instances" => "farms#start", :as => 'farm_start'
+  match "farms/start/:name/:num_instances" => "farms#start", :as => 'farm_start', :via => 'post'
   
   root :to => "farms#index"
   
