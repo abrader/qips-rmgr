@@ -376,12 +376,10 @@ class Node
     end
   end
   
-  # Removes node and client from Chef as well as uses Right AWS method for shutdown of instance
-  def self.shutdown_instance(instance_id, farm_name)
+  # Removes node and client from Chef as well as uses Fog method for instance termination
+  def self.shutdown_instance(instance_id, farm_name=nil)
     chef_aware = Object.new
     conn = Connect.new
-    
-    conn.set_region(Farm.find_by_name(farm_name).avail_zone)
     
     begin
       if Node.load(instance_id)
@@ -391,6 +389,17 @@ class Node
       end
     rescue Net::HTTPServerException
       chef_aware = false
+    end
+    
+    if farm_name.nil?
+      begin
+        instance = conn.fog.servers.get(instance_id).destroy
+      rescue 
+        conn.switch_region
+        instance = conn.fog.servers.get(instance_id).destroy
+      end
+    else
+      conn.set_region(Farm.find_by_name(farm_name).avail_zone)
     end
         
     begin
