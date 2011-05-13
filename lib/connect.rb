@@ -30,29 +30,7 @@ class Connect
     rescue
       return false
     end
-  end
-  
-  def bind_spot_instance_region(spot_instance_request_id)
-    begin
-      self.right_ec2.describe_spot_instance_requests(spot_instance_request_id)
-      return self.region
-    rescue RightAws::AwsError
-      self.switch_region
-      self.right_ec2.describe_spot_instance_requests(spot_instance_request_id)
-      return self.region
-    end
-  end
-  
-  def bind_image_region(ami_id)
-    begin
-      self.right_ec2.describe_images(ami_id)
-      return self.region
-    rescue RightAws::AwsError
-      self.switch_region
-      self.right_ec2.describe_images(ami_id)
-      return self.region
-    end
-  end    
+  end 
   
   def switch_region
     if self.region == "east"
@@ -69,10 +47,12 @@ class Connect
     begin
       location = String.new
       
-      if rgn == "west"
+      if rgn =~ /west/
         location =  "us-west-1"
+        @region = "west"
       else
         location = "us-east-1"
+        @region = "east"
       end
       
       @fog = Fog::Compute.new(
@@ -85,8 +65,6 @@ class Connect
       @right_ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => location)
 
       @right_acw = RightAws::AcwInterface.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => location)
-
-      @region = rgn
       return true
     rescue
       return false

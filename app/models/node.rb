@@ -1,5 +1,5 @@
 class Node
-  attr_accessor :instance_id, :sir_state, :aws_state, :hostname, :spot_instance_request_id, :region
+  attr_accessor :instance_id, :aws_state, :hostname, :spot_instance_request_id, :region, :launch_time
   
   require 'chef/knife/bootstrap'
   require 'chef/knife/ssh'
@@ -29,7 +29,7 @@ class Node
       @aws_state = instance[:aws_state]
       @hostname = instance[:dns_name]
       @spot_instance_request_id  = instance[:spot_instance_request_id]
-      @sir_state = conn.right_ec2.describe_spot_instance_requests(@spot_instance_request_id)[0][:state]
+      @launch_time = instance[:aws_launch_time].to_time
       return self
     rescue RightAws::AwsError
       conn.switch_region
@@ -39,7 +39,7 @@ class Node
       @aws_state = instance[:aws_state]
       @hostname = instance[:dns_name]
       @spot_instance_request_id  = instance[:spot_instance_request_id]
-      @sir_state = conn.right_ec2.describe_spot_instance_requests(@spot_instance_request_id)[0][:state]
+      @launch_time = instance[:aws_launch_time].to_time
       return self
     end
   end
@@ -53,7 +53,12 @@ class Node
   end
   
   def self.load(name)
-    chef_server_rest.get_rest("nodes/#{name}")
+    begin
+      chef_server_rest.get_rest("nodes/#{name}")
+    rescue
+      Rails.logger.debug("Node.load: Unable to find Chef info for #{name}")
+      return nil
+    end
   end
   
   # Get the list of all systems registered with Chef.
@@ -69,9 +74,9 @@ class Node
     end
   end
   
-  def self.cpu_util(instance_id)
+  def self.cpu_util(instance_id, farm_name)
     conn = Connect.new
-    conn.set_region(Node.find_by_instance_id(instance_id).region) # This is will set the EC2 region appriopriately for the ACW command
+    conn.set_region(Farm.find_by_name(farm_name).avail_zone) # This is will set the EC2 region appriopriately for the ACW command
     util_over_time = 10 # min
     stats = conn.right_acw.get_metric_statistics(:start_time => (Time.now.utc - (util_over_time * 60)), :period => 60, :namespace => "AWS/EC2", :dimentions => {:InstanceId => instance_id}, :measure_name=>"CPUUtilization")
     avg = 0.0
@@ -114,12 +119,18 @@ class Node
   def self.instance_match(instance_id)
     Node.list().each do |node_name, sys_url|
       chef_node = Node.load(node_name)
-      begin
-        if instance_id == chef_node.ec2.instance_id && ! chef_node.qips_status.nil? && ! chef_node.qips_farm.nil?
-          return true
+      Farm.all.each do |fm|
+        begin
+          if chef_node.nil?
+            Rails.logger.error("Node.instance_match: Chef query returned nil object.")
+          end
+          
+          if instance_id == chef_node.ec2.instance_id && chef_node.qips_farm == fm.name
+            return true
+          end
+        rescue ArgumentError
+          return false
         end
-      rescue ArgumentError
-        return false
       end
     end
     return false
@@ -132,7 +143,7 @@ class Node
     instance = nil
     
     conn = Connect.new
-    conn.bind_image_region(image_id)
+    conn.set_region(avail_zone)
     
     if ami_type == nil
       arch = Node.get_arch(image_id)
@@ -162,10 +173,10 @@ class Node
     # Must hang in a loop until Amazon issues us a instance id
     while @instance_id == nil
       sleep(5)
-      status = Node.describe_spot_instance_request(@spot_instance_request_id)
+      status = Node.describe_spot_instance_request(@spot_instance_request_id, avail_zone)
       @instance_id = status[:instance_id]
-      @sir_state = status[:state]
-      break if (@sir_state == nil || @sir_state == "cancelled" || @sir_state == "failed")
+      sir_state = status[:state]
+      break if (sir_state == nil || sir_state == "cancelled" || sir_state == "failed")
     end
     
     # Get the status of our instance now that we have an instance ID
@@ -200,7 +211,7 @@ class Node
       tries +=1
       retry if tries <= 2
       Rails.logger.error("Node.start_by_spot_request: Unable to bootstrap instance #{@instance_id}.")
-      Node.shutdown_instance(@instance_id)
+      Node.shutdown_instance(@instance_id, farm_name)
       fm = Farm.find_by_name(farm_name)
       fm.start_instances(1)
     end
@@ -211,6 +222,7 @@ class Node
     sleep(15)
     Node.set_farm_name(@instance_id, farm_name)
     Node.set_qips_status(@instance_id, "idle")
+    self.set_launch_time
     Node.set_chef_url()
   end
   
@@ -253,6 +265,39 @@ class Node
       node.save
     rescue => e
       Rails.logger.error("Node.set_farm_name: Unable to set #{instance_id} to farm #{farm_name}. --- #{e.backtrace}")
+    end
+  end
+  
+  def self.get_farm_name(instance_id)
+    begin
+      Node.query_chef("node", "name", instance_id)[0].qips_farm
+    rescue
+      Rails.logger.error("Node.get_farm_name: Unable to retrieve QIPS Status from Chef server for #{instance_id}.")
+      return nil
+    end
+  end
+  
+  def set_launch_time
+    begin
+      if @instance_id.nil? || @launch_time.nil?
+        Rails.logger("Node.set_launch_time: Unable to set launch time due to instance_id or launch_time == nil.")
+        return false
+      end
+      node_name = Node.id_to_name(instance_id)
+      if node_name.nil?
+        Rails.logger.error("Node.set_launch_time: #{instance_id} does not exist")
+        exit
+      end
+      node = Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{node_name}")
+      if node.nil?
+        Rails.logger.error("Node.set_launch_time: get_rest failed for #{node_name}.")
+      end
+      node.attribute["qips_launch_time"] = @launch_time
+      node.save
+      return true
+    rescue => e
+      Rails.logger.error("Node.set_launch_time: Unable to set #{instance_id} to farm #{farm_name}.")
+      return false
     end
   end
   
@@ -332,11 +377,11 @@ class Node
   end
   
   # Removes node and client from Chef as well as uses Right AWS method for shutdown of instance
-  def self.shutdown_instance(instance_id)
+  def self.shutdown_instance(instance_id, farm_name)
     chef_aware = Object.new
     conn = Connect.new
     
-    conn.set_region(Node.find_by_instance_id(instance_id).region)
+    conn.set_region(Farm.find_by_name(farm_name).avail_zone)
     
     begin
       if Node.load(instance_id)
@@ -363,10 +408,10 @@ class Node
   end
   
   # Wrapper for Right AWS describe_spot_instance_requests method, Fog not capable currently.
-  def self.describe_spot_instance_request(spot_instance_request_id)
+  def self.describe_spot_instance_request(spot_instance_request_id, region)
     begin
       conn = Connect.new
-      conn.bind_spot_instance_region(spot_instance_request_id)
+      conn.set_region(region)
       conn.right_ec2.describe_spot_instance_requests(spot_instance_request_id)[0]
     rescue => e
       puts e.backtrace
@@ -394,15 +439,17 @@ class Node
   
   # Sets @aws_state, @hostname
   def get_instance_status()
-    conn = Connect.new
     if @instance_id == nil
       return false
     else
+      conn = Connect.new
+          
       begin
         instance = conn.right_ec2.describe_instances(@instance_id)[0]
         @region = conn.region
         @aws_state = instance[:aws_state]
         @hostname = instance[:dns_name]
+        @launch_time = instance[:aws_launch_time].to_time
         return true
       rescue RightAws::AwsError
         conn.switch_region
@@ -410,6 +457,7 @@ class Node
         @region = conn.region
         @aws_state = instance[:aws_state]
         @hostname = instance[:dns_name]
+        @launch_time = instance[:aws_launch_time].to_time
         return true
       end
     end
@@ -419,7 +467,7 @@ class Node
   def self.get_arch(ami_id)
     begin
       conn = Connect.new
-      conn.bind_image_region(ami_id)
+      conn.set_region(self.region)
       conn.right_ec2.describe_images(ami_id)[0][:aws_architecture]
     rescue
       Rails.logger.error("Node.get_arch: Unable to retrieve architecture for #{ami_id}. Most likely invalid AMI ID.")
