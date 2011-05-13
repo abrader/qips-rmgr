@@ -49,8 +49,10 @@ class Connect
       
       if rgn =~ /west/
         location =  "us-west-1"
+        @region = "west"
       else
         location = "us-east-1"
+        @region = "east"
       end
       
       @fog = Fog::Compute.new(
@@ -63,8 +65,6 @@ class Connect
       @right_ec2 = RightAws::Ec2.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => location)
 
       @right_acw = RightAws::AcwInterface.new(Chef::Config[:knife][:aws_access_key_id], Chef::Config[:knife][:aws_secret_access_key], :region => location)
-
-      @region = rgn
       return true
     rescue
       return false

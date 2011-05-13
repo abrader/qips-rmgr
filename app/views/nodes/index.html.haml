@@ -6,43 +6,44 @@
 %br/
 %h1 Nodes
 %br/
-- @farms.keys.each do |farm_name|
-  - if ! @farms[farm_name].nil? && ! @farms[farm_name].empty?
-    %h3= h farm_name
-    %table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
-      %tr{:bgcolor => "#669900"}
-        %th.first Name
-        %th Hostname
-        %th Instance ID
-        %th AMI ID
-        %th Reservation ID
-        %th Security Groups
-        %th Roles
-        %th Uptime
-        %th CPU
-        - if farm_name != "Chef Server"
-          %th Set Status
-          %th &nbsp;
-          %th.last &nbsp; 
-      - @farms[farm_name].each do |node|
-        - if ! node.nil?
-          %tr.data_row
-            %td= link_to node.name, url_for(node.chef_url)
-            %td= h node.ec2.public_hostname
-            %td= h node.ec2.instance_id
-            %td= h node.ec2.ami_id
-            %td= h node.ec2.reservation_id
-            %td= h node.ec2.security_groups
-            %td= h node.roles
-            %td= h distance_of_time_in_words(node.qips_launch_time.to_time, Time.now, false).capitalize
-            %td= h Node.cpu_util(node.ec2.instance_id, farm_name)
-            - if farm_name != "Chef Server"
-              - if ! node.nil? && Node.get_qips_status(node.ec2.instance_id) == "busy"
-                %td= button_to "Set Idle", idle_node_path(:id => node.ec2.instance_id), :confirm => "Are you sure you want to set #{node.ec2.instance_id} to idle?"
-              - else
-                %td= button_to "Set Busy", busy_node_path(:id => node.ec2.instance_id), :confirm => "Are you sure you want to set #{node.ec2.instance_id} to busy?"
-              %td= link_to 'Edit', url_for(node.chef_url + '/edit')
-              %td= link_to "Shutdown", shutdown_node_path(:id => node.ec2.instance_id), :confirm => "Are you sure you want to shutdown the instance #{node.ec2.instance_id}?"
+- if ! @farms.nil? && ! @farms.empty?
+  - @farms.keys.each do |farm_name|
+    - if ! @farms[farm_name].nil? && ! @farms[farm_name].empty?
+      %h3= h farm_name
+      %table{:border => "1", :cellpadding => "3", :cellspacing => "0"}
+        %tr{:bgcolor => "#669900"}
+          %th.first Name
+          %th Hostname
+          %th Instance ID
+          %th AMI ID
+          %th Reservation ID
+          %th Security Groups
+          %th Roles
+          %th Uptime
+          %th CPU
+          - if farm_name != "Chef Server"
+            %th Set Status
+            %th &nbsp;
+            %th.last &nbsp; 
+        - @farms[farm_name].each do |node|
+          - if ! node.nil?
+            %tr.data_row
+              %td= link_to node.name, url_for(node.chef_url)
+              %td= h node.ec2.public_hostname
+              %td= h node.ec2.instance_id
+              %td= h node.ec2.ami_id
+              %td= h node.ec2.reservation_id
+              %td= h node.ec2.security_groups
+              %td= h node.roles
+              %td= h distance_of_time_in_words(node.qips_launch_time.to_time, Time.now, false).capitalize
+              %td= h Node.cpu_util(node.ec2.instance_id, farm_name)
+              - if farm_name != "Chef Server"
+                - if ! node.nil? && Node.get_qips_status(node.ec2.instance_id) == "busy"
+                  %td= button_to "Set Idle", idle_node_path(:id => node.ec2.instance_id), :confirm => "Are you sure you want to set #{node.ec2.instance_id} to idle?"
+                - else
+                  %td= button_to "Set Busy", busy_node_path(:id => node.ec2.instance_id), :confirm => "Are you sure you want to set #{node.ec2.instance_id} to busy?"
+                %td= link_to 'Edit', url_for(node.chef_url + '/edit')
+                %td= link_to "Shutdown", shutdown_node_path(:id => node.ec2.instance_id), :confirm => "Are you sure you want to shutdown the instance #{node.ec2.instance_id}?"
 %br/
 %br/
 %hr/

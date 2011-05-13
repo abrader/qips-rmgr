@@ -114,12 +114,18 @@ class Node
   def self.instance_match(instance_id)
     Node.list().each do |node_name, sys_url|
       chef_node = Node.load(node_name)
-      begin
-        if instance_id == chef_node.ec2.instance_id && ! chef_node.qips_status.nil? && ! chef_node.qips_farm.nil?
-          return true
+      Farm.all.each do |fm|
+        begin
+          if chef_node.nil?
+            Rails.logger.error("Node.instance_match: Chef query returned nil object.")
+          end
+          
+          if instance_id == chef_node.ec2.instance_id && chef_node.qips_farm == fm.name
+            return true
+          end
+        rescue ArgumentError
+          return false
         end
-      rescue ArgumentError
-        return false
       end
     end
     return false
@@ -132,7 +138,7 @@ class Node
     instance = nil
     
     conn = Connect.new
-    conn.set_region(Farm.find_by_name(farm_name).avail_zone)
+    conn.set_region(avail_zone)
     
     if ami_type == nil
       arch = Node.get_arch(image_id)
@@ -162,7 +168,7 @@ class Node
     # Must hang in a loop until Amazon issues us a instance id
     while @instance_id == nil
       sleep(5)
-      status = Node.describe_spot_instance_request(@spot_instance_request_id)
+      status = Node.describe_spot_instance_request(@spot_instance_request_id, avail_zone)
       @instance_id = status[:instance_id]
       sir_state = status[:state]
       break if (sir_state == nil || sir_state == "cancelled" || sir_state == "failed")
@@ -396,10 +402,10 @@ class Node
   end
   
   # Wrapper for Right AWS describe_spot_instance_requests method, Fog not capable currently.
-  def self.describe_spot_instance_request(spot_instance_request_id)
+  def self.describe_spot_instance_request(spot_instance_request_id, region)
     begin
       conn = Connect.new
-      conn.set_region(self.region)
+      conn.set_region(region)
       conn.right_ec2.describe_spot_instance_requests(spot_instance_request_id)[0]
     rescue => e
       puts e.backtrace
