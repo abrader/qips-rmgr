@@ -51,7 +51,7 @@ class FarmsController < ApplicationController
     @roles = Role.get_roles
     @availability_zones = Node.get_avail_zones
     
-    arch = Node.get_arch(@farm.ami_id)
+    arch = Node.get_arch(@farm.name)
     
     if arch == "i386"
       @instance_types = INSTANCE_TYPES_32
