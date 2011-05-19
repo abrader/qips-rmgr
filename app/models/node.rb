@@ -146,7 +146,7 @@ class Node
     conn.set_region(avail_zone)
     
     if ami_type == nil
-      arch = Node.get_arch(image_id)
+      arch = Node.get_arch(farm_name)
       if arch == "i386"
         ami_type = DEFAULT_32_INSTANCE_TYPE
       else
@@ -473,13 +473,14 @@ class Node
   end
   
   # Returns i386 or x86_64, require Amazon Image ID
-  def self.get_arch(ami_id)
+  def self.get_arch(farm_name)
     begin
+      fm = Farm.find_by_name(farm_name)
       conn = Connect.new
-      conn.set_region(self.region)
-      conn.right_ec2.describe_images(ami_id)[0][:aws_architecture]
+      conn.set_region(fm.avail_zone)
+      conn.right_ec2.describe_images(fm.ami_id)[0][:aws_architecture]
     rescue
-      Rails.logger.error("Node.get_arch: Unable to retrieve architecture for #{ami_id}. Most likely invalid AMI ID.")
+      Rails.logger.error("Node.get_arch: Unable to retrieve architecture for #{fm.ami_id}. Most likely invalid AMI ID.")
       return "i386"
     end
   end
