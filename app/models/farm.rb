@@ -22,6 +22,24 @@ class Farm < ActiveRecord::Base
     end
   end
   
+  def self.chef_ec2_reconcile
+    begin
+      all_instance_ids = Farm.ec2_instance_ids
+      Farm.find(:all).each do |fm|
+        fm.running_instances.each do |inst|
+          if ! all_instance_ids.include?(inst["instance_id"]) && fm.name != "Chef Server"
+            Node.delete_chef_client(inst["instance_id"])
+            Node.delete_chef_node(inst["instance_id"])
+          end
+        end
+      end
+      return true
+    rescue
+      Rails.logger.error("Farm.chef_ec2_reconcile: Unable to perform ec2/chef reconciliation.")
+      return false
+    end    
+  end
+  
   def idle()
     # Returns instance ids of instances that are in an idle state associated with this farm.
     instance_ids = Array.new
@@ -44,6 +62,20 @@ class Farm < ActiveRecord::Base
       end
     end
     instance_ids
+  end
+  
+  def self.ec2_instance_ids
+    # Returns an array of running EC2 instance ids
+    conn = Connect.new
+    instance_id_array = Array.new
+    conn.fog.servers.each do |inst|
+      instance_id_array << inst.id
+    end
+    conn.switch_region
+    conn.fog.servers.each do |inst|
+      instance_id_array << inst.id
+    end
+    instance_id_array
   end
     
   def running_instances()
@@ -92,9 +124,11 @@ class Farm < ActiveRecord::Base
   end
   
   def self.reconcile_nodes()
-    #First we call Farm.min_max_check to shutdown nodes that aren't warranted by it's farm.
+    # First we call Farm.min_max_check to shutdown nodes that aren't warranted by it's farm.
     Farm.min_max_check
-    #Second we check if CPU is being used after 52 minutes since the instance was launched is up. If so, shutdown instance.
+    # Second, we check to see if nodes/clients exist in Chef but not EC2
+    Farm.chef_ec2_reconcile
+    # Thirdly, we check if CPU is being used after 52 minutes since the instance was launched is up. If so, shutdown instance.
     begin
       
       conn = Connect.new
@@ -119,6 +153,7 @@ class Farm < ActiveRecord::Base
           end
         end
       end
+      return true
     rescue
       Rails.logger.error("[#{Time.now}] Farm.reconcile_nodes: Unable to perform reconcile duties.")
       return false
@@ -129,7 +164,7 @@ class Farm < ActiveRecord::Base
     if num_instances.to_i > 0
       begin
         num_instances.to_i.times do
-          Node.async_start_by_spot_request(self.name, self.avail_zone, self.keypair, self.ami_id, self.ami_type)
+          Node.async_start_by_spot_request(self.name, self.avail_zone, self.keypair, self.ami_id, self.ami_type, self.spot_price)
         end
       rescue => e
         puts e.backtrace
