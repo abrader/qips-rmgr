@@ -16,6 +16,7 @@
     %th EC2 Type
     %th Keypair
     %th Availability Zone
+    %th Spot Price
     %th Start?
     %th.last &nbsp;
   - if ! @farms.nil? && ! @farms.empty?
@@ -33,6 +34,7 @@
         %td= h farm.ami_type
         %td= h farm.keypair
         %td= h farm.avail_zone
+        %td= h farm.spot_price
         %td= button_to "Start", farm_start_path(:name => farm.name, :num_instances => 1), :confirm => "Are you sure you want to start and instance of #{farm.name}?"
         %td= link_to 'Destroy', farm_path(farm), :method => 'delete', :confirm => "Are you sure you want to delete the farm titled #{farm.name}?"
 %br/

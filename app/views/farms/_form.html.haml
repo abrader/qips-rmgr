@@ -37,4 +37,8 @@
       = select :farm, :avail_zone, options_for_select(@availability_zones, @farm.avail_zone)
       %span.roles The availability zone where this farm will be instantiated
     .group.form
+      %label.label{:for => "farm_spot_price"} Spot Price
+      = text_field :farm, :spot_price, :size => 2, :value => params.has_key?(:spot_price) ? h(params[:spot_price]) : @farm.spot_price
+      %span.roles The spot price you are willing to pay per hour for an instance from this farm
+    .group.form
       = f.submit "Commit"
