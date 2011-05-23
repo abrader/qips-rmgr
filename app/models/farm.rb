@@ -160,11 +160,11 @@ class Farm < ActiveRecord::Base
     end
   end
     
-  def start_instances(num_instances)
+  def start_instances(num_instances, request_type)
     if num_instances.to_i > 0
       begin
         num_instances.to_i.times do
-          Node.async_start_by_spot_request(self.name, self.avail_zone, self.keypair, self.ami_id, self.ami_type, self.spot_price)
+          Node.async_start_by_request(self.name, request_type)
         end
       rescue => e
         puts e.backtrace

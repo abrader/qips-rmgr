@@ -79,7 +79,7 @@ class FarmsController < ApplicationController
   def start
     begin
       @farm = Farm.find_by_name(params[:name])
-      @farm.start_instances(params[:num_instances])
+      @farm.start_instances(params[:num_instances], params[:request_type])
       redirect_to farms_path, :notice => "Started #{params[:num_instances]} instance(s) of #{@farm.name}."
     rescue => e
       puts e.backtrace
