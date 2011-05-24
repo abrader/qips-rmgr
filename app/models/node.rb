@@ -208,13 +208,13 @@ class Node
     end
     
     # Must wait for aws_state to go from Pending to Active in order to get pertinent host information i.e., hostname
-    while @aws_state =~ /pending/
+    while @aws_state =~ /pending/ || @hostname.nil? || @hostname.empty?
       sleep(5)
       self.get_instance_status
     end
     
     # Get the latest info on our instance now that hostname should be populated
-    self.get_instance_status
+    # self.get_instance_status
     
     # wait for it to be ready to do stuff
     Node.wait_for_ssh(@hostname)
