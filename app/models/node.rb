@@ -136,17 +136,19 @@ class Node
     return false
   end
   
-  def start_by_spot_request(farm_name, avail_zone, keypair, image_id, ami_type, spot_price)
+  def start_by_request(farm_name, request_type)
     # This is the AWS reduced cost spot request
     require 'net/ssh/multi'
     
     instance = nil
     
-    conn = Connect.new
-    conn.set_region(avail_zone)
+    fm = Farm.find_by_name(farm_name)
     
-    if ami_type == nil
-      arch = Node.get_arch(farm_name)
+    conn = Connect.new
+    conn.set_region(fm.avail_zone)
+        
+    if fm.ami_type == nil
+      arch = Node.get_arch(fm.name)
       if arch == "i386"
         ami_type = DEFAULT_32_INSTANCE_TYPE
       else
@@ -154,45 +156,65 @@ class Node
       end
     end
     
+    if ! request_type.nil? && request_type =~ /demand/i
+      request_type = "on_demand"
+    else
+      request_type = "spot"
+    end
+      
+    
     launch_group = ("QIPS_" + Rails.env).to_s
     
-    sir = conn.right_ec2.request_spot_instances(
-            :image_id => image_id,
-            :spot_price => spot_price,
-            :key_name => keypair,
-            :instance_count => 1,
-            :monitoring_enabled => true,
-            :launch_group => launch_group,
-            :groups => Chef::Config[:knife][:security_groups],
-            :instance_type => ami_type,
-            :availability_zone => avail_zone
-    )
+    if request_type == "spot"
+      sir = conn.right_ec2.request_spot_instances(
+              :image_id => fm.ami_id,
+              :spot_price => fm.spot_price,
+              :key_name => fm.keypair,
+              :instance_count => 1,
+              :monitoring_enabled => true,
+              :launch_group => launch_group,
+              :groups => Chef::Config[:knife][:security_groups],
+              :instance_type => fm.ami_type,
+              :availability_zone => fm.avail_zone
+      )
     
-    @spot_instance_request_id = sir[0][:spot_instance_request_id]
+      @spot_instance_request_id = sir[0][:spot_instance_request_id]
     
-    # Must hang in a loop until Amazon issues us a instance id
-    while @instance_id == nil
-      sleep(5)
-      status = Node.describe_spot_instance_request(@spot_instance_request_id, avail_zone)
-      @instance_id = status[:instance_id]
-      sir_state = status[:state]
-      break if (sir_state == nil || sir_state == "cancelled" || sir_state == "failed")
+      # Must hang in a loop until Amazon issues us a instance id
+      while @instance_id == nil
+        sleep(5)
+        status = Node.describe_spot_instance_request(@spot_instance_request_id, fm.avail_zone)
+        @instance_id = status[:instance_id]
+        sir_state = status[:state]
+        break if (sir_state == nil || sir_state == "cancelled" || sir_state == "failed")
+      end
+    else
+      @instance_id = conn.fog.servers.create(
+        :image_id => fm.ami_id,
+        :availability_zone => fm.avail_zone,
+        :groups => Chef::Config[:knife][:security_groups].to_a,
+        :flavor_id => fm.ami_type,
+        :monitoring => true,
+        :key_name => fm.keypair
+      ).id
     end
     
     # Get the status of our instance now that we have an instance ID
-    self.get_instance_status
+    # self.get_instance_status
     
     # Once we're done with the spot instance request we can cancel it
-    conn.right_ec2.cancel_spot_instance_requests(@spot_instance_request_id)
+    if request_type == "spot"
+      conn.right_ec2.cancel_spot_instance_requests(@spot_instance_request_id)
+    end
     
     # Must wait for aws_state to go from Pending to Active in order to get pertinent host information i.e., hostname
-    while @aws_state =~ /pending/
+    while @aws_state =~ /pending/ || @hostname.nil? || @hostname.empty?
       sleep(5)
       self.get_instance_status
     end
     
     # Get the latest info on our instance now that hostname should be populated
-    self.get_instance_status
+    # self.get_instance_status
     
     # wait for it to be ready to do stuff
     Node.wait_for_ssh(@hostname)
@@ -227,14 +249,14 @@ class Node
   end
   
   # Resque method called by Farm to instantiate a spot instance request via queue
-  def self.async_start_by_spot_request(farm_name, avail_zone, keypair, image_id=Chef::Config[:knife][:image], ami_type=nil, spot_price=Chef::Config[:knife][:spot_price])
-    Resque.enqueue(Node, farm_name, avail_zone, keypair, image_id, ami_type, spot_price)
+  def self.async_start_by_request(farm_name, request_type=nil)
+    Resque.enqueue(Node, farm_name, request_type)
   end
   
   # Resque required method for calling start_by_spot_request via queue
-  def self.perform(farm_name, avail_zone, keypair, image_id, ami_type, spot_price)
+  def self.perform(farm_name, request_type)
     n = Node.new
-    n.start_by_spot_request(farm_name, avail_zone, keypair, image_id, ami_type, spot_price)
+    n.start_by_request(farm_name, request_type)
   end
   
   def self.set_chef_url()
