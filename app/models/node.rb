@@ -199,9 +199,6 @@ class Node
       ).id
     end
     
-    # Get the status of our instance now that we have an instance ID
-    # self.get_instance_status
-    
     # Once we're done with the spot instance request we can cancel it
     if request_type == "spot"
       conn.right_ec2.cancel_spot_instance_requests(@spot_instance_request_id)
@@ -212,9 +209,6 @@ class Node
       sleep(5)
       self.get_instance_status
     end
-    
-    # Get the latest info on our instance now that hostname should be populated
-    # self.get_instance_status
     
     # wait for it to be ready to do stuff
     Node.wait_for_ssh(@hostname)
@@ -263,7 +257,8 @@ class Node
     begin
       Node.list().each do |name,node_url|
         current_node = Node.load(name)
-        current_node.attribute["chef_url"] = node_url.gsub(/4000/, '4040')
+        #current_node.attribute["chef_url"] = node_url.gsub(/4000/, '4040')
+        current_node.attribute["chef_url"] = Chef::Config[:chef_server_webui_url] + "/nodes/" + name
         current_node.save
       end
     rescue => e
