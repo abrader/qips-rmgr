@@ -29,7 +29,8 @@ class Role
      @roles = Array.new
      Role.list().each do |name,role_url|
        current_role = Role.load(name)
-       current_role.default_attributes["chef_url"] = role_url.gsub(/4000/, '4040')
+       #current_role.default_attributes["chef_url"] = role_url.gsub(/4000/, '4040')
+       current_role.default_attributes["chef_url"] = Chef::Config[:chef_server_webui_url] + "/roles/" + name
        current_role.save
        @roles << current_role
      end
