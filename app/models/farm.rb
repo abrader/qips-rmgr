@@ -109,8 +109,12 @@ class Farm < ActiveRecord::Base
         current_farm = Array.new
         nodes.each do |node_name, sys_url|
           nd = Node.load(node_name)
-          if fm.name == nd.qips_farm
-            current_farm << nd
+          begin 
+            if fm.name == nd.qips_farm
+              current_farm << nd
+            end
+          rescue ArgumentError
+            #Do nothing
           end
         end
         payload[fm.name] = current_farm
